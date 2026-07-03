@@ -35,10 +35,11 @@ services:
       elasticsearch:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9600/actuator/health"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9600' 2>/dev/null"]
       interval: 30s
       timeout: 10s
-      retries: 5
+      retries: 7
+      start_period: 30s
 
   operate:
     image: camunda/operate:8.5.0
@@ -71,14 +72,15 @@ services:
     depends_on:
       zeebe:
         condition: service_healthy
-    command: >
-      sh -c "
-        apk add --no-cache curl &&
+    command:
+      - sh
+      - -c
+      - |
+        apk add --no-cache curl
+        curl -L https://github.com/camunda-cloud/zeebe/releases/download/8.5.0/zbctl -o /usr/local/bin/zbctl
+        chmod +x /usr/local/bin/zbctl
         for f in /workflows/*.bpmn; do
-          [ -f \"$$f\" ] || { echo 'No BPMN files found, skipping deploy'; break; }
-          echo \"Deploying $$f\" &&
-          curl -X POST http://zeebe:8080/v1/deployments
-            -H 'Content-Type: multipart/form-data'
-            -F \"resources=@$$f\";
+          [ -f "$$f" ] || { echo 'No BPMN files found, skipping deploy'; break; }
+          echo "Deploying $$f"
+          zbctl deploy "$$f" --address zeebe:26500 --insecure
         done
-      "

@@ -9,10 +9,15 @@ An opinionated golden path tool that guides developers through the full lifecycl
 ## Quick Start
 
 ```bash
-docker compose up
+docker compose up --detach
 ```
 
 This starts the Camunda workflow stack. See [docs/local-development.md](docs/local-development.md) for port references, UI access, and troubleshooting tips.
+
+```bash
+docker compose down
+```
+
 
 ## Documentation
 

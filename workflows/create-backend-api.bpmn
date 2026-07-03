@@ -1,0 +1,579 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+             xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             targetNamespace="http://studious-invention/workflows"
+             exporter="Claude" exporterVersion="1.0">
+
+  <!-- Messages used for worker callbacks when a security threshold is cleared -->
+  <message id="Message_SonarCloudCleared" name="sonarcloud-threshold-cleared">
+    <extensionElements>
+      <zeebe:subscription correlationKey="=serviceId" />
+    </extensionElements>
+  </message>
+  <message id="Message_SnykCleared" name="snyk-threshold-cleared">
+    <extensionElements>
+      <zeebe:subscription correlationKey="=serviceId" />
+    </extensionElements>
+  </message>
+  <message id="Message_GitGuardianCleared" name="gitguardian-threshold-cleared">
+    <extensionElements>
+      <zeebe:subscription correlationKey="=serviceId" />
+    </extensionElements>
+  </message>
+
+  <process id="create-backend-api" name="Create Backend API/Service" isExecutable="true">
+
+    <startEvent id="start" name="Service Requested">
+      <outgoing>flow-start-to-phase1</outgoing>
+    </startEvent>
+
+    <!-- ================================================================
+         PHASE 1: PROVISION PROJECT
+         ================================================================ -->
+    <subProcess id="phase-1-provision-project" name="Phase 1: Provision Project">
+      <incoming>flow-start-to-phase1</incoming>
+      <outgoing>flow-phase1-to-phase2</outgoing>
+
+      <startEvent id="phase1-start">
+        <outgoing>flow-p1-start-to-scaffold-repo</outgoing>
+      </startEvent>
+
+      <serviceTask id="scaffold-repository" name="Scaffold Repository">
+        <documentation>docs/steps/scaffold-repository.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="scaffold-repository" />
+        </extensionElements>
+        <incoming>flow-p1-start-to-scaffold-repo</incoming>
+        <outgoing>flow-scaffold-repo-to-scaffold-project</outgoing>
+      </serviceTask>
+
+      <serviceTask id="scaffold-project" name="Scaffold Project">
+        <documentation>docs/steps/scaffold-project.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="scaffold-project" />
+        </extensionElements>
+        <incoming>flow-scaffold-repo-to-scaffold-project</incoming>
+        <outgoing>flow-scaffold-project-to-tools-fork</outgoing>
+      </serviceTask>
+
+      <!-- Parallel fork: configure tooling concurrently -->
+      <parallelGateway id="tools-fork" name="Configure Tools">
+        <incoming>flow-scaffold-project-to-tools-fork</incoming>
+        <outgoing>flow-fork-to-sonarcloud</outgoing>
+        <outgoing>flow-fork-to-snyk</outgoing>
+        <outgoing>flow-fork-to-gitguardian</outgoing>
+        <outgoing>flow-fork-to-sentry</outgoing>
+        <outgoing>flow-fork-to-grafana</outgoing>
+      </parallelGateway>
+
+      <serviceTask id="configure-sonarcloud" name="Configure SonarCloud">
+        <documentation>docs/steps/configure-sonarcloud.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="configure-sonarcloud" />
+        </extensionElements>
+        <incoming>flow-fork-to-sonarcloud</incoming>
+        <outgoing>flow-sonarcloud-to-tools-join</outgoing>
+      </serviceTask>
+
+      <serviceTask id="configure-snyk" name="Configure Snyk">
+        <documentation>docs/steps/configure-snyk.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="configure-snyk" />
+        </extensionElements>
+        <incoming>flow-fork-to-snyk</incoming>
+        <outgoing>flow-snyk-to-tools-join</outgoing>
+      </serviceTask>
+
+      <serviceTask id="configure-gitguardian" name="Configure GitGuardian">
+        <documentation>docs/steps/configure-gitguardian.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="configure-gitguardian" />
+        </extensionElements>
+        <incoming>flow-fork-to-gitguardian</incoming>
+        <outgoing>flow-gitguardian-to-tools-join</outgoing>
+      </serviceTask>
+
+      <serviceTask id="configure-sentry" name="Configure Sentry">
+        <documentation>docs/steps/configure-sentry.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="configure-sentry" />
+        </extensionElements>
+        <incoming>flow-fork-to-sentry</incoming>
+        <outgoing>flow-sentry-to-tools-join</outgoing>
+      </serviceTask>
+
+      <serviceTask id="configure-grafana-cloud" name="Configure Grafana Cloud">
+        <documentation>docs/steps/configure-grafana-cloud.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="configure-grafana-cloud" />
+        </extensionElements>
+        <incoming>flow-fork-to-grafana</incoming>
+        <outgoing>flow-grafana-to-tools-join</outgoing>
+      </serviceTask>
+
+      <!-- Parallel join: wait for all tools to be configured -->
+      <parallelGateway id="tools-join">
+        <incoming>flow-sonarcloud-to-tools-join</incoming>
+        <incoming>flow-snyk-to-tools-join</incoming>
+        <incoming>flow-gitguardian-to-tools-join</incoming>
+        <incoming>flow-sentry-to-tools-join</incoming>
+        <incoming>flow-grafana-to-tools-join</incoming>
+        <outgoing>flow-tools-join-to-provision-infra</outgoing>
+      </parallelGateway>
+
+      <serviceTask id="provision-infrastructure" name="Provision Infrastructure">
+        <documentation>docs/steps/provision-infrastructure.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="provision-infrastructure" />
+        </extensionElements>
+        <incoming>flow-tools-join-to-provision-infra</incoming>
+        <outgoing>flow-provision-infra-to-deploy-staging</outgoing>
+      </serviceTask>
+
+      <serviceTask id="deploy-to-staging" name="Deploy to Staging">
+        <documentation>docs/steps/deploy-to-staging.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="deploy-to-staging" />
+        </extensionElements>
+        <incoming>flow-provision-infra-to-deploy-staging</incoming>
+        <outgoing>flow-deploy-staging-to-phase1-end</outgoing>
+      </serviceTask>
+
+      <endEvent id="phase1-end">
+        <incoming>flow-deploy-staging-to-phase1-end</incoming>
+      </endEvent>
+
+      <sequenceFlow id="flow-p1-start-to-scaffold-repo" sourceRef="phase1-start" targetRef="scaffold-repository" />
+      <sequenceFlow id="flow-scaffold-repo-to-scaffold-project" sourceRef="scaffold-repository" targetRef="scaffold-project" />
+      <sequenceFlow id="flow-scaffold-project-to-tools-fork" sourceRef="scaffold-project" targetRef="tools-fork" />
+      <sequenceFlow id="flow-fork-to-sonarcloud" sourceRef="tools-fork" targetRef="configure-sonarcloud" />
+      <sequenceFlow id="flow-fork-to-snyk" sourceRef="tools-fork" targetRef="configure-snyk" />
+      <sequenceFlow id="flow-fork-to-gitguardian" sourceRef="tools-fork" targetRef="configure-gitguardian" />
+      <sequenceFlow id="flow-fork-to-sentry" sourceRef="tools-fork" targetRef="configure-sentry" />
+      <sequenceFlow id="flow-fork-to-grafana" sourceRef="tools-fork" targetRef="configure-grafana-cloud" />
+      <sequenceFlow id="flow-sonarcloud-to-tools-join" sourceRef="configure-sonarcloud" targetRef="tools-join" />
+      <sequenceFlow id="flow-snyk-to-tools-join" sourceRef="configure-snyk" targetRef="tools-join" />
+      <sequenceFlow id="flow-gitguardian-to-tools-join" sourceRef="configure-gitguardian" targetRef="tools-join" />
+      <sequenceFlow id="flow-sentry-to-tools-join" sourceRef="configure-sentry" targetRef="tools-join" />
+      <sequenceFlow id="flow-grafana-to-tools-join" sourceRef="configure-grafana-cloud" targetRef="tools-join" />
+      <sequenceFlow id="flow-tools-join-to-provision-infra" sourceRef="tools-join" targetRef="provision-infrastructure" />
+      <sequenceFlow id="flow-provision-infra-to-deploy-staging" sourceRef="provision-infrastructure" targetRef="deploy-to-staging" />
+      <sequenceFlow id="flow-deploy-staging-to-phase1-end" sourceRef="deploy-to-staging" targetRef="phase1-end" />
+    </subProcess>
+
+    <!-- ================================================================
+         PHASE 2: REQUEST INITIAL REVIEWS
+         ================================================================ -->
+    <subProcess id="phase-2-initial-reviews" name="Phase 2: Request Initial Reviews">
+      <incoming>flow-phase1-to-phase2</incoming>
+      <outgoing>flow-phase2-to-phase3</outgoing>
+
+      <startEvent id="phase2-start">
+        <outgoing>flow-p2-start-to-reviews-fork</outgoing>
+      </startEvent>
+
+      <parallelGateway id="reviews-fork">
+        <incoming>flow-p2-start-to-reviews-fork</incoming>
+        <outgoing>flow-reviews-fork-to-arch-review</outgoing>
+        <outgoing>flow-reviews-fork-to-security-review</outgoing>
+      </parallelGateway>
+
+      <userTask id="request-architecture-review" name="Request Architecture Review">
+        <documentation>docs/steps/request-architecture-review.md</documentation>
+        <extensionElements>
+          <zeebe:assignmentDefinition candidateGroups="architects" />
+        </extensionElements>
+        <incoming>flow-reviews-fork-to-arch-review</incoming>
+        <outgoing>flow-arch-review-to-arch-gateway</outgoing>
+      </userTask>
+
+      <exclusiveGateway id="arch-review-gateway" name="Architecture Review Outcome">
+        <incoming>flow-arch-review-to-arch-gateway</incoming>
+        <outgoing>flow-arch-approved</outgoing>
+        <outgoing>flow-arch-skipped</outgoing>
+      </exclusiveGateway>
+
+      <sequenceFlow id="flow-arch-approved" sourceRef="arch-review-gateway" targetRef="reviews-join">
+        <conditionExpression xsi:type="tFormalExpression">=architectureReviewOutcome = "approved"</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="flow-arch-skipped" sourceRef="arch-review-gateway" targetRef="reviews-join">
+        <conditionExpression xsi:type="tFormalExpression">=architectureReviewOutcome = "skipped"</conditionExpression>
+      </sequenceFlow>
+
+      <userTask id="request-security-review" name="Request Security Review">
+        <documentation>docs/steps/request-security-review.md</documentation>
+        <extensionElements>
+          <zeebe:assignmentDefinition candidateGroups="security" />
+        </extensionElements>
+        <incoming>flow-reviews-fork-to-security-review</incoming>
+        <outgoing>flow-security-review-to-security-gateway</outgoing>
+      </userTask>
+
+      <exclusiveGateway id="initial-security-review-gateway" name="Initial Security Review Outcome">
+        <incoming>flow-security-review-to-security-gateway</incoming>
+        <outgoing>flow-initial-security-approved</outgoing>
+        <outgoing>flow-initial-security-skipped</outgoing>
+      </exclusiveGateway>
+
+      <sequenceFlow id="flow-initial-security-approved" sourceRef="initial-security-review-gateway" targetRef="reviews-join">
+        <conditionExpression xsi:type="tFormalExpression">=initialSecurityReviewOutcome = "approved"</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="flow-initial-security-skipped" sourceRef="initial-security-review-gateway" targetRef="reviews-join">
+        <conditionExpression xsi:type="tFormalExpression">=initialSecurityReviewOutcome = "skipped"</conditionExpression>
+      </sequenceFlow>
+
+      <parallelGateway id="reviews-join">
+        <incoming>flow-arch-approved</incoming>
+        <incoming>flow-arch-skipped</incoming>
+        <incoming>flow-initial-security-approved</incoming>
+        <incoming>flow-initial-security-skipped</incoming>
+        <outgoing>flow-reviews-join-to-phase2-end</outgoing>
+      </parallelGateway>
+
+      <endEvent id="phase2-end">
+        <incoming>flow-reviews-join-to-phase2-end</incoming>
+      </endEvent>
+
+      <sequenceFlow id="flow-p2-start-to-reviews-fork" sourceRef="phase2-start" targetRef="reviews-fork" />
+      <sequenceFlow id="flow-reviews-fork-to-arch-review" sourceRef="reviews-fork" targetRef="request-architecture-review" />
+      <sequenceFlow id="flow-reviews-fork-to-security-review" sourceRef="reviews-fork" targetRef="request-security-review" />
+      <sequenceFlow id="flow-arch-review-to-arch-gateway" sourceRef="request-architecture-review" targetRef="arch-review-gateway" />
+      <sequenceFlow id="flow-security-review-to-security-gateway" sourceRef="request-security-review" targetRef="initial-security-review-gateway" />
+      <sequenceFlow id="flow-reviews-join-to-phase2-end" sourceRef="reviews-join" targetRef="phase2-end" />
+    </subProcess>
+
+    <!-- ================================================================
+         PHASE 3: DEVELOPMENT
+         ================================================================ -->
+    <subProcess id="phase-3-development" name="Phase 3: Development">
+      <incoming>flow-phase2-to-phase3</incoming>
+      <outgoing>flow-phase3-to-phase4</outgoing>
+
+      <startEvent id="phase3-start">
+        <outgoing>flow-p3-start-to-develop</outgoing>
+      </startEvent>
+
+      <userTask id="develop-project" name="Develop Project">
+        <documentation>docs/steps/develop-project.md</documentation>
+        <extensionElements>
+          <zeebe:assignmentDefinition candidateGroups="developers" />
+        </extensionElements>
+        <incoming>flow-p3-start-to-develop</incoming>
+        <outgoing>flow-develop-to-develop-gateway</outgoing>
+      </userTask>
+
+      <exclusiveGateway id="develop-gateway" name="Development Outcome">
+        <incoming>flow-develop-to-develop-gateway</incoming>
+        <outgoing>flow-develop-approved</outgoing>
+        <outgoing>flow-develop-skipped</outgoing>
+      </exclusiveGateway>
+
+      <sequenceFlow id="flow-develop-approved" sourceRef="develop-gateway" targetRef="write-unit-tests">
+        <conditionExpression xsi:type="tFormalExpression">=developmentOutcome = "approved"</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="flow-develop-skipped" sourceRef="develop-gateway" targetRef="write-unit-tests">
+        <conditionExpression xsi:type="tFormalExpression">=developmentOutcome = "skipped"</conditionExpression>
+      </sequenceFlow>
+
+      <userTask id="write-unit-tests" name="Write Unit Tests">
+        <documentation>docs/steps/write-unit-tests.md</documentation>
+        <extensionElements>
+          <zeebe:assignmentDefinition candidateGroups="developers" />
+        </extensionElements>
+        <incoming>flow-develop-approved</incoming>
+        <incoming>flow-develop-skipped</incoming>
+        <outgoing>flow-unit-tests-to-unit-tests-gateway</outgoing>
+      </userTask>
+
+      <exclusiveGateway id="unit-tests-gateway" name="Unit Tests Outcome">
+        <incoming>flow-unit-tests-to-unit-tests-gateway</incoming>
+        <outgoing>flow-unit-tests-approved</outgoing>
+        <outgoing>flow-unit-tests-skipped</outgoing>
+      </exclusiveGateway>
+
+      <sequenceFlow id="flow-unit-tests-approved" sourceRef="unit-tests-gateway" targetRef="write-e2e-tests">
+        <conditionExpression xsi:type="tFormalExpression">=unitTestsOutcome = "approved"</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="flow-unit-tests-skipped" sourceRef="unit-tests-gateway" targetRef="write-e2e-tests">
+        <conditionExpression xsi:type="tFormalExpression">=unitTestsOutcome = "skipped"</conditionExpression>
+      </sequenceFlow>
+
+      <userTask id="write-e2e-tests" name="Write End-to-End Tests">
+        <documentation>docs/steps/write-e2e-tests.md</documentation>
+        <extensionElements>
+          <zeebe:assignmentDefinition candidateGroups="developers" />
+        </extensionElements>
+        <incoming>flow-unit-tests-approved</incoming>
+        <incoming>flow-unit-tests-skipped</incoming>
+        <outgoing>flow-e2e-tests-to-e2e-gateway</outgoing>
+      </userTask>
+
+      <exclusiveGateway id="e2e-tests-gateway" name="E2E Tests Outcome">
+        <incoming>flow-e2e-tests-to-e2e-gateway</incoming>
+        <outgoing>flow-e2e-approved</outgoing>
+        <outgoing>flow-e2e-skipped</outgoing>
+      </exclusiveGateway>
+
+      <sequenceFlow id="flow-e2e-approved" sourceRef="e2e-tests-gateway" targetRef="phase3-end">
+        <conditionExpression xsi:type="tFormalExpression">=e2eTestsOutcome = "approved"</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="flow-e2e-skipped" sourceRef="e2e-tests-gateway" targetRef="phase3-end">
+        <conditionExpression xsi:type="tFormalExpression">=e2eTestsOutcome = "skipped"</conditionExpression>
+      </sequenceFlow>
+
+      <endEvent id="phase3-end">
+        <incoming>flow-e2e-approved</incoming>
+        <incoming>flow-e2e-skipped</incoming>
+      </endEvent>
+
+      <sequenceFlow id="flow-p3-start-to-develop" sourceRef="phase3-start" targetRef="develop-project" />
+      <sequenceFlow id="flow-develop-to-develop-gateway" sourceRef="develop-project" targetRef="develop-gateway" />
+      <sequenceFlow id="flow-unit-tests-to-unit-tests-gateway" sourceRef="write-unit-tests" targetRef="unit-tests-gateway" />
+      <sequenceFlow id="flow-e2e-tests-to-e2e-gateway" sourceRef="write-e2e-tests" targetRef="e2e-tests-gateway" />
+    </subProcess>
+
+    <!-- ================================================================
+         PHASE 4: RESOLVE SECURITY FINDINGS
+         Each tool follows: check threshold -> clear: continue | breached: wait for callback -> re-check
+         All three tools run in parallel. Grafana finalization also runs in parallel.
+         ================================================================ -->
+    <subProcess id="phase-4-security-findings" name="Phase 4: Resolve Security Findings">
+      <incoming>flow-phase3-to-phase4</incoming>
+      <outgoing>flow-phase4-to-phase5</outgoing>
+
+      <startEvent id="phase4-start">
+        <outgoing>flow-p4-start-to-scans-fork</outgoing>
+      </startEvent>
+
+      <!-- Parallel fork: all three security tools + Grafana finalization run concurrently -->
+      <parallelGateway id="scans-fork">
+        <incoming>flow-p4-start-to-scans-fork</incoming>
+        <outgoing>flow-scans-fork-to-sonarcloud-check</outgoing>
+        <outgoing>flow-scans-fork-to-snyk-check</outgoing>
+        <outgoing>flow-scans-fork-to-gitguardian-check</outgoing>
+        <outgoing>flow-scans-fork-to-finalize-grafana</outgoing>
+      </parallelGateway>
+
+      <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+           SONARCLOUD: check threshold -> wait if breached -> loop
+           - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
+      <serviceTask id="check-sonarcloud-threshold" name="Check SonarCloud Threshold">
+        <documentation>docs/steps/check-sonarcloud-threshold.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="check-sonarcloud-threshold" />
+        </extensionElements>
+        <incoming>flow-scans-fork-to-sonarcloud-check</incoming>
+        <incoming>flow-sonarcloud-catch-to-recheck</incoming>
+        <outgoing>flow-sonarcloud-check-to-gateway</outgoing>
+      </serviceTask>
+
+      <exclusiveGateway id="sonarcloud-threshold-gateway" name="SonarCloud Threshold">
+        <incoming>flow-sonarcloud-check-to-gateway</incoming>
+        <outgoing>flow-sonarcloud-clear</outgoing>
+        <outgoing>flow-sonarcloud-breached</outgoing>
+      </exclusiveGateway>
+
+      <sequenceFlow id="flow-sonarcloud-clear" sourceRef="sonarcloud-threshold-gateway" targetRef="scans-join">
+        <conditionExpression xsi:type="tFormalExpression">=sonarcloudThresholdClear = true</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="flow-sonarcloud-breached" sourceRef="sonarcloud-threshold-gateway" targetRef="sonarcloud-threshold-catch">
+        <conditionExpression xsi:type="tFormalExpression">=sonarcloudThresholdClear = false</conditionExpression>
+      </sequenceFlow>
+
+      <!-- Worker correlates this message back when SonarCloud quality gate clears -->
+      <intermediateCatchEvent id="sonarcloud-threshold-catch" name="Await SonarCloud Cleared">
+        <incoming>flow-sonarcloud-breached</incoming>
+        <outgoing>flow-sonarcloud-catch-to-recheck</outgoing>
+        <messageEventDefinition messageRef="Message_SonarCloudCleared" />
+      </intermediateCatchEvent>
+
+      <sequenceFlow id="flow-sonarcloud-catch-to-recheck" sourceRef="sonarcloud-threshold-catch" targetRef="check-sonarcloud-threshold" />
+
+      <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+           SNYK: check threshold -> wait if breached -> loop
+           - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
+      <serviceTask id="check-snyk-threshold" name="Check Snyk Threshold">
+        <documentation>docs/steps/check-snyk-threshold.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="check-snyk-threshold" />
+        </extensionElements>
+        <incoming>flow-scans-fork-to-snyk-check</incoming>
+        <incoming>flow-snyk-catch-to-recheck</incoming>
+        <outgoing>flow-snyk-check-to-gateway</outgoing>
+      </serviceTask>
+
+      <exclusiveGateway id="snyk-threshold-gateway" name="Snyk Threshold">
+        <incoming>flow-snyk-check-to-gateway</incoming>
+        <outgoing>flow-snyk-clear</outgoing>
+        <outgoing>flow-snyk-breached</outgoing>
+      </exclusiveGateway>
+
+      <sequenceFlow id="flow-snyk-clear" sourceRef="snyk-threshold-gateway" targetRef="scans-join">
+        <conditionExpression xsi:type="tFormalExpression">=snykThresholdClear = true</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="flow-snyk-breached" sourceRef="snyk-threshold-gateway" targetRef="snyk-threshold-catch">
+        <conditionExpression xsi:type="tFormalExpression">=snykThresholdClear = false</conditionExpression>
+      </sequenceFlow>
+
+      <!-- Worker correlates this message back when Snyk findings drop below threshold -->
+      <intermediateCatchEvent id="snyk-threshold-catch" name="Await Snyk Cleared">
+        <incoming>flow-snyk-breached</incoming>
+        <outgoing>flow-snyk-catch-to-recheck</outgoing>
+        <messageEventDefinition messageRef="Message_SnykCleared" />
+      </intermediateCatchEvent>
+
+      <sequenceFlow id="flow-snyk-catch-to-recheck" sourceRef="snyk-threshold-catch" targetRef="check-snyk-threshold" />
+
+      <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+           GITGUARDIAN: check threshold -> wait if breached -> loop
+           - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
+      <serviceTask id="check-gitguardian-threshold" name="Check GitGuardian Threshold">
+        <documentation>docs/steps/check-gitguardian-threshold.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="check-gitguardian-threshold" />
+        </extensionElements>
+        <incoming>flow-scans-fork-to-gitguardian-check</incoming>
+        <incoming>flow-gitguardian-catch-to-recheck</incoming>
+        <outgoing>flow-gitguardian-check-to-gateway</outgoing>
+      </serviceTask>
+
+      <exclusiveGateway id="gitguardian-threshold-gateway" name="GitGuardian Threshold">
+        <incoming>flow-gitguardian-check-to-gateway</incoming>
+        <outgoing>flow-gitguardian-clear</outgoing>
+        <outgoing>flow-gitguardian-breached</outgoing>
+      </exclusiveGateway>
+
+      <sequenceFlow id="flow-gitguardian-clear" sourceRef="gitguardian-threshold-gateway" targetRef="scans-join">
+        <conditionExpression xsi:type="tFormalExpression">=gitguardianThresholdClear = true</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="flow-gitguardian-breached" sourceRef="gitguardian-threshold-gateway" targetRef="gitguardian-threshold-catch">
+        <conditionExpression xsi:type="tFormalExpression">=gitguardianThresholdClear = false</conditionExpression>
+      </sequenceFlow>
+
+      <!-- Worker correlates this message back when no secrets are detected -->
+      <intermediateCatchEvent id="gitguardian-threshold-catch" name="Await GitGuardian Cleared">
+        <incoming>flow-gitguardian-breached</incoming>
+        <outgoing>flow-gitguardian-catch-to-recheck</outgoing>
+        <messageEventDefinition messageRef="Message_GitGuardianCleared" />
+      </intermediateCatchEvent>
+
+      <sequenceFlow id="flow-gitguardian-catch-to-recheck" sourceRef="gitguardian-threshold-catch" targetRef="check-gitguardian-threshold" />
+
+      <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+           GRAFANA CLOUD: finalize alerting and dashboards (needs running app)
+           - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
+      <serviceTask id="finalize-grafana-cloud" name="Finalize Grafana Cloud">
+        <documentation>docs/steps/finalize-grafana-cloud.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="finalize-grafana-cloud" />
+        </extensionElements>
+        <incoming>flow-scans-fork-to-finalize-grafana</incoming>
+        <outgoing>flow-finalize-grafana-to-scans-join</outgoing>
+      </serviceTask>
+
+      <!-- Parallel join: all three tools clear + Grafana done -->
+      <parallelGateway id="scans-join">
+        <incoming>flow-sonarcloud-clear</incoming>
+        <incoming>flow-snyk-clear</incoming>
+        <incoming>flow-gitguardian-clear</incoming>
+        <incoming>flow-finalize-grafana-to-scans-join</incoming>
+        <outgoing>flow-scans-join-to-security-signoff</outgoing>
+      </parallelGateway>
+
+      <userTask id="request-security-signoff" name="Request Security Sign-off">
+        <documentation>docs/steps/request-security-signoff.md</documentation>
+        <extensionElements>
+          <zeebe:assignmentDefinition candidateGroups="security" />
+        </extensionElements>
+        <incoming>flow-scans-join-to-security-signoff</incoming>
+        <outgoing>flow-security-signoff-to-gateway</outgoing>
+      </userTask>
+
+      <exclusiveGateway id="security-signoff-gateway" name="Security Sign-off Outcome">
+        <incoming>flow-security-signoff-to-gateway</incoming>
+        <outgoing>flow-security-signoff-approved</outgoing>
+        <outgoing>flow-security-signoff-skipped</outgoing>
+      </exclusiveGateway>
+
+      <sequenceFlow id="flow-security-signoff-approved" sourceRef="security-signoff-gateway" targetRef="phase4-end">
+        <conditionExpression xsi:type="tFormalExpression">=securitySignoffOutcome = "approved"</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="flow-security-signoff-skipped" sourceRef="security-signoff-gateway" targetRef="phase4-end">
+        <conditionExpression xsi:type="tFormalExpression">=securitySignoffOutcome = "skipped"</conditionExpression>
+      </sequenceFlow>
+
+      <endEvent id="phase4-end">
+        <incoming>flow-security-signoff-approved</incoming>
+        <incoming>flow-security-signoff-skipped</incoming>
+      </endEvent>
+
+      <sequenceFlow id="flow-p4-start-to-scans-fork" sourceRef="phase4-start" targetRef="scans-fork" />
+      <sequenceFlow id="flow-scans-fork-to-sonarcloud-check" sourceRef="scans-fork" targetRef="check-sonarcloud-threshold" />
+      <sequenceFlow id="flow-scans-fork-to-snyk-check" sourceRef="scans-fork" targetRef="check-snyk-threshold" />
+      <sequenceFlow id="flow-scans-fork-to-gitguardian-check" sourceRef="scans-fork" targetRef="check-gitguardian-threshold" />
+      <sequenceFlow id="flow-scans-fork-to-finalize-grafana" sourceRef="scans-fork" targetRef="finalize-grafana-cloud" />
+      <sequenceFlow id="flow-sonarcloud-check-to-gateway" sourceRef="check-sonarcloud-threshold" targetRef="sonarcloud-threshold-gateway" />
+      <sequenceFlow id="flow-snyk-check-to-gateway" sourceRef="check-snyk-threshold" targetRef="snyk-threshold-gateway" />
+      <sequenceFlow id="flow-gitguardian-check-to-gateway" sourceRef="check-gitguardian-threshold" targetRef="gitguardian-threshold-gateway" />
+      <sequenceFlow id="flow-finalize-grafana-to-scans-join" sourceRef="finalize-grafana-cloud" targetRef="scans-join" />
+      <sequenceFlow id="flow-scans-join-to-security-signoff" sourceRef="scans-join" targetRef="request-security-signoff" />
+      <sequenceFlow id="flow-security-signoff-to-gateway" sourceRef="request-security-signoff" targetRef="security-signoff-gateway" />
+    </subProcess>
+
+    <!-- ================================================================
+         PHASE 5: PRODUCTION DEPLOYMENT
+         ================================================================ -->
+    <subProcess id="phase-5-production" name="Phase 5: Production Deployment">
+      <incoming>flow-phase4-to-phase5</incoming>
+      <outgoing>flow-phase5-to-end</outgoing>
+
+      <startEvent id="phase5-start">
+        <outgoing>flow-p5-start-to-deploy-prod</outgoing>
+      </startEvent>
+
+      <serviceTask id="deploy-to-production" name="Deploy to Production">
+        <documentation>docs/steps/deploy-to-production.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="deploy-to-production" />
+        </extensionElements>
+        <incoming>flow-p5-start-to-deploy-prod</incoming>
+        <outgoing>flow-deploy-prod-to-health-check</outgoing>
+      </serviceTask>
+
+      <serviceTask id="post-deploy-health-check" name="Post-Deploy Health Check">
+        <documentation>docs/steps/post-deploy-health-check.md</documentation>
+        <extensionElements>
+          <zeebe:taskDefinition type="post-deploy-health-check" />
+        </extensionElements>
+        <incoming>flow-deploy-prod-to-health-check</incoming>
+        <outgoing>flow-health-check-to-phase5-end</outgoing>
+      </serviceTask>
+
+      <endEvent id="phase5-end">
+        <incoming>flow-health-check-to-phase5-end</incoming>
+      </endEvent>
+
+      <sequenceFlow id="flow-p5-start-to-deploy-prod" sourceRef="phase5-start" targetRef="deploy-to-production" />
+      <sequenceFlow id="flow-deploy-prod-to-health-check" sourceRef="deploy-to-production" targetRef="post-deploy-health-check" />
+      <sequenceFlow id="flow-health-check-to-phase5-end" sourceRef="post-deploy-health-check" targetRef="phase5-end" />
+    </subProcess>
+
+    <endEvent id="end" name="Service in Production">
+      <incoming>flow-phase5-to-end</incoming>
+    </endEvent>
+
+    <sequenceFlow id="flow-start-to-phase1" sourceRef="start" targetRef="phase-1-provision-project" />
+    <sequenceFlow id="flow-phase1-to-phase2" sourceRef="phase-1-provision-project" targetRef="phase-2-initial-reviews" />
+    <sequenceFlow id="flow-phase2-to-phase3" sourceRef="phase-2-initial-reviews" targetRef="phase-3-development" />
+    <sequenceFlow id="flow-phase3-to-phase4" sourceRef="phase-3-development" targetRef="phase-4-security-findings" />
+    <sequenceFlow id="flow-phase4-to-phase5" sourceRef="phase-4-security-findings" targetRef="phase-5-production" />
+    <sequenceFlow id="flow-phase5-to-end" sourceRef="phase-5-production" targetRef="end" />
+
+  </process>
+
+</definitions>
