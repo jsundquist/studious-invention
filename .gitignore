@@ -11,3 +11,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# UI (Node / Yarn Berry)
+apps/ui/node_modules/
+apps/ui/dist/
+apps/ui/.yarn/cache/
+apps/ui/.pnp.*
