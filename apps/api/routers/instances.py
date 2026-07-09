@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from fastapi import APIRouter, HTTPException
 
 import services.operate as operate
@@ -14,13 +13,13 @@ from models.instance import (
     TaskCompleteRequest,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/instances", tags=["instances"])
 
 
 @router.post("", response_model=StartInstanceResponse, status_code=201)
-async def start_instance(body: StartInstanceRequest):
+async def start_instance(body: StartInstanceRequest) -> StartInstanceResponse:
     definition = await operate.get_process_definition(body.workflow)
     if definition is None:
         raise HTTPException(status_code=404, detail=f"Workflow '{body.workflow}' not found")
@@ -34,7 +33,7 @@ async def start_instance(body: StartInstanceRequest):
 
 
 @router.get("/{instance_id}", response_model=InstanceStatus)
-async def get_instance(instance_id: str):
+async def get_instance(instance_id: str) -> InstanceStatus:
     instance = await operate.get_instance(instance_id)
     if instance is None:
         raise HTTPException(status_code=404, detail=f"Instance '{instance_id}' not found")
@@ -57,7 +56,7 @@ async def get_instance(instance_id: str):
 
 
 @router.get("/{instance_id}/history", response_model=list[HistoryEntry])
-async def get_instance_history(instance_id: str):
+async def get_instance_history(instance_id: str) -> list[HistoryEntry]:
     instance = await operate.get_instance(instance_id)
     if instance is None:
         raise HTTPException(status_code=404, detail=f"Instance '{instance_id}' not found")
@@ -77,7 +76,7 @@ async def get_instance_history(instance_id: str):
 
 
 @router.post("/{instance_id}/tasks/{task_id}/complete", status_code=204)
-async def complete_task(instance_id: str, task_id: str, body: TaskCompleteRequest):
+async def complete_task(instance_id: str, task_id: str, body: TaskCompleteRequest) -> None:
     instance = await operate.get_instance(instance_id)
     if instance is None:
         raise HTTPException(status_code=404, detail=f"Instance '{instance_id}' not found")

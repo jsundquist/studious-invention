@@ -4,7 +4,7 @@ TASKLIST_URL = "http://localhost:8082"
 TASKLIST_AUTH = ("demo", "demo")
 
 
-async def complete_task(task_id: str, variables: dict) -> None:
+async def complete_task(task_id: str, variables: dict[str, str]) -> None:
     async with httpx.AsyncClient() as client:
         response = await client.patch(
             f"{TASKLIST_URL}/v1/tasks/{task_id}/complete",

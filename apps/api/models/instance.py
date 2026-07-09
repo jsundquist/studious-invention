@@ -1,11 +1,11 @@
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, model_validator
 
 
 class StartInstanceRequest(BaseModel):
     workflow: str
-    inputs: dict = {}
+    inputs: dict[str, Any] = {}
 
 
 class StartInstanceResponse(BaseModel):

@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
 import services.operate as operate
-from models.workflow import StepDocumentation, WorkflowDetail, WorkflowSummary
+from models.workflow import PhaseSummary, StepDocumentation, WorkflowDetail, WorkflowSummary
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
@@ -11,19 +11,19 @@ DOCS_DIR = Path(__file__).parent.parent.parent.parent / "docs" / "steps"
 
 
 @router.get("", response_model=list[WorkflowSummary])
-async def list_workflows():
+async def list_workflows() -> list[WorkflowSummary]:
     return await operate.list_process_definitions()
 
 
 @router.get("/{name}", response_model=WorkflowDetail)
-async def get_workflow(name: str):
+async def get_workflow(name: str) -> WorkflowDetail:
     detail = await operate.get_process_definition(name)
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Workflow '{name}' not found")
     return detail
 
 
-def _find_doc_path(phases, step_name: str) -> str | None:
+def _find_doc_path(phases: list[PhaseSummary], step_name: str) -> str | None:
     for phase in phases:
         for step in phase.steps:
             if step.id == step_name or step.name.lower().replace(" ", "-") == step_name:
@@ -32,7 +32,7 @@ def _find_doc_path(phases, step_name: str) -> str | None:
 
 
 @router.get("/{name}/steps/{step_name}", response_model=StepDocumentation)
-async def get_step_documentation(name: str, step_name: str):
+async def get_step_documentation(name: str, step_name: str) -> StepDocumentation:
     detail = await operate.get_process_definition(name)
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Workflow '{name}' not found")

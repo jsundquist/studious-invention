@@ -1,7 +1,12 @@
+import os
+
 from fastapi import FastAPI
 
+from logging_config import configure_logging
 from routers.instances import router as instances_router
 from routers.workflows import router as workflows_router
+
+configure_logging(log_level=os.getenv("LOG_LEVEL", "INFO"))
 
 app = FastAPI(
     title="Studious Invention API",
@@ -14,5 +19,5 @@ app.include_router(instances_router)
 
 
 @app.get("/health", tags=["health"])
-async def health():
+async def health() -> dict[str, str]:
     return {"status": "ok"}

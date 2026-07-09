@@ -1,5 +1,7 @@
 import xml.etree.ElementTree as ET
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import httpx
 
@@ -13,7 +15,7 @@ BPMN_NS = {"bpmn": "http://www.omg.org/spec/BPMN/20100524/MODEL"}
 
 
 @asynccontextmanager
-async def _session():
+async def _session() -> AsyncGenerator[httpx.AsyncClient, None]:
     async with httpx.AsyncClient() as client:
         await client.post(
             f"{OPERATE_URL}/api/login",
@@ -103,16 +105,16 @@ def _parse_phases_from_bpmn(bpmn_xml: str) -> list[PhaseSummary]:
     return phases
 
 
-async def get_instance(instance_id: str) -> dict | None:
+async def get_instance(instance_id: str) -> dict[str, Any] | None:
     async with _session() as client:
         response = await client.get(f"{OPERATE_URL}/v1/process-instances/{instance_id}")
         if response.status_code == 404:
             return None
         response.raise_for_status()
-        return response.json()
+        return response.json()  # type: ignore[no-any-return]
 
 
-async def get_active_elements(instance_id: str) -> list[dict]:
+async def get_active_elements(instance_id: str) -> list[dict[str, Any]]:
     async with _session() as client:
         response = await client.post(
             f"{OPERATE_URL}/v1/flow-node-instances/search",
@@ -122,10 +124,10 @@ async def get_active_elements(instance_id: str) -> list[dict]:
             },
         )
         response.raise_for_status()
-        return response.json().get("items", [])
+        return response.json().get("items", [])  # type: ignore[no-any-return]
 
 
-async def get_completed_elements(instance_id: str) -> list[dict]:
+async def get_completed_elements(instance_id: str) -> list[dict[str, Any]]:
     async with _session() as client:
         response = await client.post(
             f"{OPERATE_URL}/v1/flow-node-instances/search",
@@ -135,4 +137,4 @@ async def get_completed_elements(instance_id: str) -> list[dict]:
             },
         )
         response.raise_for_status()
-        return response.json().get("items", [])
+        return response.json().get("items", [])  # type: ignore[no-any-return]
