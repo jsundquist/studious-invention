@@ -1,0 +1,589 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+             xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             id="Definitions_1"
+             targetNamespace="http://bpmn.io/schema/bpmn"
+             exporter="Claude" exporterVersion="1.0">
+
+  <process id="aws_state_machine_replica" name="AWS State Machine (Human Tasks)" isExecutable="true">
+
+    <startEvent id="start" name="Start">
+      <outgoing>flow-start-to-phase1</outgoing>
+    </startEvent>
+
+    <!-- ================================================================
+         PHASE 1 — maps to AWS "Phase 1" Parallel state
+         Branch 1: Task 1
+         Branch 2: Task 2 → Task 3
+         The parallel join (p1-join) waits for BOTH branches before
+         the subprocess exits, identical to AWS Parallel waiting for
+         all branches to reach "End": true.
+         ================================================================ -->
+    <subProcess id="phase1" name="Phase 1">
+      <incoming>flow-start-to-phase1</incoming>
+      <outgoing>flow-phase1-to-phase2</outgoing>
+
+      <startEvent id="phase1-start">
+        <outgoing>flow-p1-start-to-fork</outgoing>
+      </startEvent>
+
+      <parallelGateway id="p1-fork">
+        <incoming>flow-p1-start-to-fork</incoming>
+        <outgoing>flow-p1-fork-to-task1</outgoing>
+        <outgoing>flow-p1-fork-to-task2</outgoing>
+      </parallelGateway>
+
+      <userTask id="task1" name="Task 1">
+        <documentation>## Task One
+
+The first parallel branch in Phase 1. Assignees complete the initial
+intake form and attach any required supporting documentation.
+
+**Checklist:**
+- [ ] Intake form submitted
+- [ ] Stakeholder contact confirmed
+- [ ] Supporting docs attached
+
+_Average completion time: 2 business days._</documentation>
+        <extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Complete the intake form and attach supporting docs; runs in parallel with the Task 2 → Task 3 branch." />
+          </zeebe:properties>
+        </extensionElements>
+        <incoming>flow-p1-fork-to-task1</incoming>
+        <outgoing>flow-task1-to-p1-join</outgoing>
+      </userTask>
+
+      <userTask id="task2" name="Task 2">
+        <documentation>## Task Two
+
+Opens the second branch of the Phase 1 parallel split. This task must
+be completed **before Task 3 can start** — they are sequential within
+this branch.
+
+**Input required:** the output artifact from the pre-work checklist,
+which is assumed to be available when the process instance starts.</documentation>
+        <extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="First step in the lower Phase 1 branch; requires the pre-work checklist artifact and gates Task 3." />
+          </zeebe:properties>
+        </extensionElements>
+        <incoming>flow-p1-fork-to-task2</incoming>
+        <outgoing>flow-task2-to-task3</outgoing>
+      </userTask>
+
+      <userTask id="task3" name="Task 3">
+        <documentation>## Task Three
+
+Final step in the lower branch of Phase 1. Produces a signed-off
+deliverable that unblocks the Phase 1 parallel join gateway.
+
+> This task is a **successor to Task 2** and should never be assigned
+> independently — the process guarantees correct sequencing.</documentation>
+        <extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Final step in the lower Phase 1 branch; produces the sign-off deliverable that unblocks the parallel join." />
+          </zeebe:properties>
+        </extensionElements>
+        <incoming>flow-task2-to-task3</incoming>
+        <outgoing>flow-task3-to-p1-join</outgoing>
+      </userTask>
+
+      <parallelGateway id="p1-join">
+        <incoming>flow-task1-to-p1-join</incoming>
+        <incoming>flow-task3-to-p1-join</incoming>
+        <outgoing>flow-p1-join-to-phase1-end</outgoing>
+      </parallelGateway>
+
+      <endEvent id="phase1-end">
+        <incoming>flow-p1-join-to-phase1-end</incoming>
+      </endEvent>
+
+      <sequenceFlow id="flow-p1-start-to-fork"    sourceRef="phase1-start" targetRef="p1-fork"/>
+      <sequenceFlow id="flow-p1-fork-to-task1"    sourceRef="p1-fork"      targetRef="task1"/>
+      <sequenceFlow id="flow-p1-fork-to-task2"    sourceRef="p1-fork"      targetRef="task2"/>
+      <sequenceFlow id="flow-task1-to-p1-join"    sourceRef="task1"        targetRef="p1-join"/>
+      <sequenceFlow id="flow-task2-to-task3"      sourceRef="task2"        targetRef="task3"/>
+      <sequenceFlow id="flow-task3-to-p1-join"    sourceRef="task3"        targetRef="p1-join"/>
+      <sequenceFlow id="flow-p1-join-to-phase1-end" sourceRef="p1-join"    targetRef="phase1-end"/>
+    </subProcess>
+
+    <!-- ================================================================
+         PHASE 2 — maps to AWS "Phase 2" Parallel state
+         Branch 1: Task 4
+         Branch 2: Task 5
+         Branch 3: Task 6
+         ================================================================ -->
+    <subProcess id="phase2" name="Phase 2">
+      <incoming>flow-phase1-to-phase2</incoming>
+      <outgoing>flow-phase2-to-phase3</outgoing>
+
+      <startEvent id="phase2-start">
+        <outgoing>flow-p2-start-to-fork</outgoing>
+      </startEvent>
+
+      <parallelGateway id="p2-fork">
+        <incoming>flow-p2-start-to-fork</incoming>
+        <outgoing>flow-p2-fork-to-task4</outgoing>
+        <outgoing>flow-p2-fork-to-task5</outgoing>
+        <outgoing>flow-p2-fork-to-task6</outgoing>
+      </parallelGateway>
+
+      <userTask id="task4" name="Task 4">
+        <documentation>## Task Four
+
+First branch of the Phase 2 parallel split. Runs concurrently with
+Tasks 5 and 6.
+
+```yaml
+assignee: platform-team
+priority: high
+sla: 3 business days
+```
+
+Deliverable: a completed review artifact uploaded to the shared drive.</documentation>
+        <extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="First Phase 2 parallel branch; platform-team owned with a 3-day SLA and a required review artifact upload." />
+          </zeebe:properties>
+        </extensionElements>
+        <incoming>flow-p2-fork-to-task4</incoming>
+        <outgoing>flow-task4-to-p2-join</outgoing>
+      </userTask>
+
+      <userTask id="task5" name="Task 5">
+        <documentation>## Task Five
+
+Second parallel branch in Phase 2. Runs concurrently with Tasks 4
+and 6.
+
+**Steps:**
+- Validate the input payload schema against the published OpenAPI spec
+- Confirm that rate-limit exemptions are in place for the integration
+- Log the validation result to the audit trail</documentation>
+        <extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Second Phase 2 branch; validate input payload schema and confirm rate-limit exemptions are applied." />
+          </zeebe:properties>
+        </extensionElements>
+        <incoming>flow-p2-fork-to-task5</incoming>
+        <outgoing>flow-task5-to-p2-join</outgoing>
+      </userTask>
+
+      <userTask id="task6" name="Task 6">
+        <documentation>## Task Six
+
+Third and final branch of the Phase 2 parallel split. Blocks the
+Phase 2 join gateway until the downstream system confirms receipt of
+the handoff payload.
+
+> If the downstream system is unavailable, escalate to the platform
+> on-call before marking this task blocked.</documentation>
+        <extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Third Phase 2 branch; waits for downstream system handoff confirmation before the parallel join can proceed." />
+          </zeebe:properties>
+        </extensionElements>
+        <incoming>flow-p2-fork-to-task6</incoming>
+        <outgoing>flow-task6-to-p2-join</outgoing>
+      </userTask>
+
+      <parallelGateway id="p2-join">
+        <incoming>flow-task4-to-p2-join</incoming>
+        <incoming>flow-task5-to-p2-join</incoming>
+        <incoming>flow-task6-to-p2-join</incoming>
+        <outgoing>flow-p2-join-to-phase2-end</outgoing>
+      </parallelGateway>
+
+      <endEvent id="phase2-end">
+        <incoming>flow-p2-join-to-phase2-end</incoming>
+      </endEvent>
+
+      <sequenceFlow id="flow-p2-start-to-fork"      sourceRef="phase2-start" targetRef="p2-fork"/>
+      <sequenceFlow id="flow-p2-fork-to-task4"      sourceRef="p2-fork"      targetRef="task4"/>
+      <sequenceFlow id="flow-p2-fork-to-task5"      sourceRef="p2-fork"      targetRef="task5"/>
+      <sequenceFlow id="flow-p2-fork-to-task6"      sourceRef="p2-fork"      targetRef="task6"/>
+      <sequenceFlow id="flow-task4-to-p2-join"      sourceRef="task4"        targetRef="p2-join"/>
+      <sequenceFlow id="flow-task5-to-p2-join"      sourceRef="task5"        targetRef="p2-join"/>
+      <sequenceFlow id="flow-task6-to-p2-join"      sourceRef="task6"        targetRef="p2-join"/>
+      <sequenceFlow id="flow-p2-join-to-phase2-end" sourceRef="p2-join"      targetRef="phase2-end"/>
+    </subProcess>
+
+    <!-- ================================================================
+         PHASE 3 — maps to AWS "Phase 3" Parallel state (single branch)
+         Task 7 presents a form field so the human assignee picks which
+         path to take. That choice sets `nextPath`, which the exclusive
+         gateway evaluates — identical to AWS Choice state routing on
+         a variable in the state input.
+         ================================================================ -->
+    <subProcess id="phase3" name="Phase 3">
+      <incoming>flow-phase2-to-phase3</incoming>
+      <outgoing>flow-phase3-to-end</outgoing>
+
+      <startEvent id="phase3-start">
+        <outgoing>flow-p3-start-to-task7</outgoing>
+      </startEvent>
+
+      <!--
+        Task 7: the assignee selects which path to take via a dropdown.
+        This maps to the AWS pattern where a Lambda's output payload
+        contains a field that drives the subsequent Choice state.
+      -->
+      <userTask id="task7" name="Task 7">
+        <documentation>## Task Seven — Path Selection
+
+The assignee reviews the current state and selects the appropriate
+onward path from the dropdown field in this task form.
+
+| Selection    | Next Step          |
+|--------------|--------------------|
+| `task8`      | Task 8 (expedited) |
+| _(default)_  | Task 9 (standard)  |
+
+The selection is written to the process variable `nextPath` and
+evaluated by the Choice 1 gateway immediately after this task
+completes.</documentation>
+        <extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Assignee selects the onward path via a dropdown; sets nextPath variable driving the Choice 1 exclusive gateway." />
+          </zeebe:properties>
+        </extensionElements>
+        <incoming>flow-p3-start-to-task7</incoming>
+        <outgoing>flow-task7-to-choice1</outgoing>
+      </userTask>
+
+      <!-- Maps to AWS "Choice 1" state. Default matches AWS Default: Task 9 -->
+      <exclusiveGateway id="choice1" name="Choice 1" default="flow-choice1-to-task9">
+        <incoming>flow-task7-to-choice1</incoming>
+        <outgoing>flow-choice1-to-task8</outgoing>
+        <outgoing>flow-choice1-to-task9</outgoing>
+      </exclusiveGateway>
+
+      <userTask id="task8" name="Task 8">
+        <documentation>## Task Eight — Expedited Path
+
+Conditional path — reached only when `nextPath = "task8"` is set in
+Task 7.
+
+Completes an expedited review cycle with a **reduced checklist**
+intended for low-risk changes that have already passed a prior
+abbreviated assessment.
+
+Do not use this path for changes that touch authentication, billing, or
+data-retention logic.</documentation>
+        <extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Expedited review path for low-risk changes; must not be used for auth, billing, or data-retention modifications." />
+          </zeebe:properties>
+        </extensionElements>
+        <incoming>flow-choice1-to-task8</incoming>
+        <outgoing>flow-task8-to-merge</outgoing>
+      </userTask>
+
+      <userTask id="task9" name="Task 9">
+        <documentation>## Task Nine — Standard Path
+
+Default path from the Choice 1 gateway. Follows the full standard
+review cycle.
+
+Expected duration is **3–5 business days** depending on reviewer
+queue depth.
+
+All checklist items must be completed and signed off before this task
+can be marked done.</documentation>
+        <extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Standard review path (default); full checklist, 3–5 business day SLA depending on reviewer queue." />
+          </zeebe:properties>
+        </extensionElements>
+        <incoming>flow-choice1-to-task9</incoming>
+        <outgoing>flow-task9-to-merge</outgoing>
+      </userTask>
+
+      <!-- XOR merge: Task 8 and Task 9 both lead here, only one token
+           arrives at a time — maps to both AWS branches having
+           "Next": "task 10" -->
+      <exclusiveGateway id="merge" name="Merge">
+        <incoming>flow-task8-to-merge</incoming>
+        <incoming>flow-task9-to-merge</incoming>
+        <outgoing>flow-merge-to-task10</outgoing>
+      </exclusiveGateway>
+
+      <userTask id="task10" name="Task 10">
+        <documentation>## Task Ten — Consolidated Sign-off
+
+Runs after the Task 8 / Task 9 merge gateway. Both paths converge here
+for a unified sign-off regardless of which path was taken.
+
+The sign-off form auto-populates fields from the previous task's outputs
+so the reviewer sees a pre-filled summary to approve or amend.</documentation>
+        <extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Consolidated sign-off after the Task 8/9 merge; form pre-populates from the prior task's output for reviewer efficiency." />
+          </zeebe:properties>
+        </extensionElements>
+        <incoming>flow-merge-to-task10</incoming>
+        <outgoing>flow-task10-to-task11</outgoing>
+      </userTask>
+
+      <userTask id="task11" name="Task 11">
+        <documentation>## Task Eleven — Process Closure
+
+Final task before Phase 3 ends. Performs housekeeping and notifies
+stakeholders.
+
+**Actions:**
+- Archives all process artifacts to the shared document store
+- Sends a completion notification to addresses in `notifyList`
+- Closes the linked tracking ticket with a resolution summary</documentation>
+        <extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Archives artifacts, notifies stakeholders via notifyList, and closes the linked tracking ticket to end Phase 3." />
+          </zeebe:properties>
+        </extensionElements>
+        <incoming>flow-task10-to-task11</incoming>
+        <outgoing>flow-task11-to-phase3-end</outgoing>
+      </userTask>
+
+      <endEvent id="phase3-end">
+        <incoming>flow-task11-to-phase3-end</incoming>
+      </endEvent>
+
+      <sequenceFlow id="flow-p3-start-to-task7"   sourceRef="phase3-start" targetRef="task7"/>
+      <sequenceFlow id="flow-task7-to-choice1"     sourceRef="task7"        targetRef="choice1"/>
+
+      <sequenceFlow id="flow-choice1-to-task8" name="Task 8 path" sourceRef="choice1" targetRef="task8">
+        <conditionExpression>=nextPath = "task8"</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="flow-choice1-to-task9" name="Task 9 path (default)" sourceRef="choice1" targetRef="task9"/>
+
+      <sequenceFlow id="flow-task8-to-merge"       sourceRef="task8"        targetRef="merge"/>
+      <sequenceFlow id="flow-task9-to-merge"       sourceRef="task9"        targetRef="merge"/>
+      <sequenceFlow id="flow-merge-to-task10"      sourceRef="merge"        targetRef="task10"/>
+      <sequenceFlow id="flow-task10-to-task11"     sourceRef="task10"       targetRef="task11"/>
+      <sequenceFlow id="flow-task11-to-phase3-end" sourceRef="task11"       targetRef="phase3-end"/>
+    </subProcess>
+
+    <endEvent id="end" name="End">
+      <incoming>flow-phase3-to-end</incoming>
+    </endEvent>
+
+    <!-- Top-level sequence flows: phases run sequentially -->
+    <sequenceFlow id="flow-start-to-phase1"  sourceRef="start"   targetRef="phase1"/>
+    <sequenceFlow id="flow-phase1-to-phase2" sourceRef="phase1"  targetRef="phase2"/>
+    <sequenceFlow id="flow-phase2-to-phase3" sourceRef="phase2"  targetRef="phase3"/>
+    <sequenceFlow id="flow-phase3-to-end"    sourceRef="phase3"  targetRef="end"/>
+
+  </process>
+
+  <!-- ================================================================
+       DIAGRAM INTERCHANGE
+       Top-level spine at y=392.
+       Phase 1 box : x=230  y=60  w=700  h=600
+       Phase 2 box : x=990  y=60  w=580  h=700
+       Phase 3 box : x=1630 y=60  w=1060 h=700
+       ================================================================ -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="aws_state_machine_replica">
+
+      <!-- ── TOP-LEVEL ── -->
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <dc:Bounds x="152" y="374" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="155" y="417" width="30" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="phase1_di" bpmnElement="phase1" isExpanded="true">
+        <dc:Bounds x="230" y="60" width="700" height="600"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="phase2_di" bpmnElement="phase2" isExpanded="true">
+        <dc:Bounds x="990" y="60" width="580" height="700"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="phase3_di" bpmnElement="phase3" isExpanded="true">
+        <dc:Bounds x="1630" y="60" width="1060" height="700"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="end_di" bpmnElement="end">
+        <dc:Bounds x="2752" y="374" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="2758" y="417" width="24" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="flow-start-to-phase1_di" bpmnElement="flow-start-to-phase1">
+        <di:waypoint x="188" y="392"/><di:waypoint x="230" y="392"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-phase1-to-phase2_di" bpmnElement="flow-phase1-to-phase2">
+        <di:waypoint x="930" y="392"/><di:waypoint x="990" y="392"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-phase2-to-phase3_di" bpmnElement="flow-phase2-to-phase3">
+        <di:waypoint x="1570" y="392"/><di:waypoint x="1630" y="392"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-phase3-to-end_di" bpmnElement="flow-phase3-to-end">
+        <di:waypoint x="2690" y="392"/><di:waypoint x="2752" y="392"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- ── PHASE 1 INTERNAL (box x=230 y=60 w=700 h=600) ──
+           spine y=392; top branch y=200; bottom branch y=540 -->
+      <bpmndi:BPMNShape id="phase1-start_di" bpmnElement="phase1-start">
+        <dc:Bounds x="272" y="374" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="p1-fork_di" bpmnElement="p1-fork">
+        <dc:Bounds x="347" y="367" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task1_di" bpmnElement="task1">
+        <dc:Bounds x="440" y="160" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task2_di" bpmnElement="task2">
+        <dc:Bounds x="440" y="500" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task3_di" bpmnElement="task3">
+        <dc:Bounds x="600" y="500" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="p1-join_di" bpmnElement="p1-join">
+        <dc:Bounds x="760" y="367" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase1-end_di" bpmnElement="phase1-end">
+        <dc:Bounds x="842" y="374" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="flow-p1-start-to-fork_di" bpmnElement="flow-p1-start-to-fork">
+        <di:waypoint x="308" y="392"/><di:waypoint x="347" y="392"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p1-fork-to-task1_di" bpmnElement="flow-p1-fork-to-task1">
+        <di:waypoint x="372" y="367"/><di:waypoint x="372" y="200"/><di:waypoint x="440" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p1-fork-to-task2_di" bpmnElement="flow-p1-fork-to-task2">
+        <di:waypoint x="372" y="417"/><di:waypoint x="372" y="540"/><di:waypoint x="440" y="540"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-task1-to-p1-join_di" bpmnElement="flow-task1-to-p1-join">
+        <di:waypoint x="540" y="200"/><di:waypoint x="785" y="200"/><di:waypoint x="785" y="367"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-task2-to-task3_di" bpmnElement="flow-task2-to-task3">
+        <di:waypoint x="540" y="540"/><di:waypoint x="600" y="540"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-task3-to-p1-join_di" bpmnElement="flow-task3-to-p1-join">
+        <di:waypoint x="700" y="540"/><di:waypoint x="785" y="540"/><di:waypoint x="785" y="417"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p1-join-to-phase1-end_di" bpmnElement="flow-p1-join-to-phase1-end">
+        <di:waypoint x="810" y="392"/><di:waypoint x="842" y="392"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- ── PHASE 2 INTERNAL (box x=990 y=60 w=580 h=700) ──
+           spine y=392; top branch y=140; bottom branch y=610 -->
+      <bpmndi:BPMNShape id="phase2-start_di" bpmnElement="phase2-start">
+        <dc:Bounds x="1032" y="374" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="p2-fork_di" bpmnElement="p2-fork">
+        <dc:Bounds x="1107" y="367" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task4_di" bpmnElement="task4">
+        <dc:Bounds x="1200" y="100" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task5_di" bpmnElement="task5">
+        <dc:Bounds x="1200" y="352" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task6_di" bpmnElement="task6">
+        <dc:Bounds x="1200" y="580" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="p2-join_di" bpmnElement="p2-join">
+        <dc:Bounds x="1365" y="367" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase2-end_di" bpmnElement="phase2-end">
+        <dc:Bounds x="1447" y="374" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="flow-p2-start-to-fork_di" bpmnElement="flow-p2-start-to-fork">
+        <di:waypoint x="1068" y="392"/><di:waypoint x="1107" y="392"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p2-fork-to-task4_di" bpmnElement="flow-p2-fork-to-task4">
+        <di:waypoint x="1132" y="367"/><di:waypoint x="1132" y="140"/><di:waypoint x="1200" y="140"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p2-fork-to-task5_di" bpmnElement="flow-p2-fork-to-task5">
+        <di:waypoint x="1157" y="392"/><di:waypoint x="1200" y="392"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p2-fork-to-task6_di" bpmnElement="flow-p2-fork-to-task6">
+        <di:waypoint x="1132" y="417"/><di:waypoint x="1132" y="620"/><di:waypoint x="1200" y="620"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-task4-to-p2-join_di" bpmnElement="flow-task4-to-p2-join">
+        <di:waypoint x="1300" y="140"/><di:waypoint x="1390" y="140"/><di:waypoint x="1390" y="367"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-task5-to-p2-join_di" bpmnElement="flow-task5-to-p2-join">
+        <di:waypoint x="1300" y="392"/><di:waypoint x="1365" y="392"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-task6-to-p2-join_di" bpmnElement="flow-task6-to-p2-join">
+        <di:waypoint x="1300" y="620"/><di:waypoint x="1390" y="620"/><di:waypoint x="1390" y="417"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p2-join-to-phase2-end_di" bpmnElement="flow-p2-join-to-phase2-end">
+        <di:waypoint x="1415" y="392"/><di:waypoint x="1447" y="392"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- ── PHASE 3 INTERNAL (box x=1630 y=60 w=1060 h=700) ──
+           spine y=392; task8 top y=200; task9 bottom y=550 -->
+      <bpmndi:BPMNShape id="phase3-start_di" bpmnElement="phase3-start">
+        <dc:Bounds x="1672" y="374" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task7_di" bpmnElement="task7">
+        <dc:Bounds x="1750" y="352" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="choice1_di" bpmnElement="choice1" isMarkerVisible="true">
+        <dc:Bounds x="1915" y="367" width="50" height="50"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1908" y="424" width="64" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task8_di" bpmnElement="task8">
+        <dc:Bounds x="2020" y="160" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task9_di" bpmnElement="task9">
+        <dc:Bounds x="2020" y="550" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="merge_di" bpmnElement="merge" isMarkerVisible="true">
+        <dc:Bounds x="2190" y="367" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task10_di" bpmnElement="task10">
+        <dc:Bounds x="2300" y="352" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task11_di" bpmnElement="task11">
+        <dc:Bounds x="2460" y="352" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase3-end_di" bpmnElement="phase3-end">
+        <dc:Bounds x="2622" y="374" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="flow-p3-start-to-task7_di" bpmnElement="flow-p3-start-to-task7">
+        <di:waypoint x="1708" y="392"/><di:waypoint x="1750" y="392"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-task7-to-choice1_di" bpmnElement="flow-task7-to-choice1">
+        <di:waypoint x="1850" y="392"/><di:waypoint x="1915" y="392"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-choice1-to-task8_di" bpmnElement="flow-choice1-to-task8">
+        <di:waypoint x="1940" y="367"/><di:waypoint x="1940" y="200"/><di:waypoint x="2020" y="200"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1948" y="278" width="68" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-choice1-to-task9_di" bpmnElement="flow-choice1-to-task9">
+        <di:waypoint x="1940" y="417"/><di:waypoint x="1940" y="590"/><di:waypoint x="2020" y="590"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1943" y="498" width="108" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-task8-to-merge_di" bpmnElement="flow-task8-to-merge">
+        <di:waypoint x="2120" y="200"/><di:waypoint x="2215" y="200"/><di:waypoint x="2215" y="367"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-task9-to-merge_di" bpmnElement="flow-task9-to-merge">
+        <di:waypoint x="2120" y="590"/><di:waypoint x="2215" y="590"/><di:waypoint x="2215" y="417"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-merge-to-task10_di" bpmnElement="flow-merge-to-task10">
+        <di:waypoint x="2240" y="392"/><di:waypoint x="2300" y="392"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-task10-to-task11_di" bpmnElement="flow-task10-to-task11">
+        <di:waypoint x="2400" y="392"/><di:waypoint x="2460" y="392"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-task11-to-phase3-end_di" bpmnElement="flow-task11-to-phase3-end">
+        <di:waypoint x="2560" y="392"/><di:waypoint x="2622" y="392"/>
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+
+</definitions>

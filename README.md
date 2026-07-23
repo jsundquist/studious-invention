@@ -1,6 +1,8 @@
-# Studious Invention
+# Branchline
 
-An opinionated golden path tool that guides developers through the full lifecycle of a software artifact — from creation through to decommissioning. Built as a learning project to deepen skills in workflow orchestration, API design, and modern developer platform patterns.
+An opinionated golden path tool that guides developers through the full lifecycle of a software artifact — from creation through to decommissioning. The golden path is the default branch; teams can branch off it knowingly, trading guardrails for autonomy. Built as a learning project to deepen skills in workflow orchestration, API design, and modern developer platform patterns.
+
+Available as a standalone dashboard (`apps/ui`) and as a Backstage frontend plugin (`apps/backstage-plugin`).
 
 ## System Requirements
 

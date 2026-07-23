@@ -1,3 +1,5 @@
+# Branchline local dev stack — Camunda 8 workflow engine (Zeebe, Operate, Tasklist, Elasticsearch)
+# Apps (API, UI, worker) run independently via their own native runtimes during development.
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
@@ -20,7 +22,7 @@ services:
       retries: 5
 
   zeebe:
-    image: camunda/zeebe:8.5.0
+    image: camunda/zeebe:8.6.0
     environment:
       - ZEEBE_BROKER_EXPORTERS_ELASTICSEARCH_CLASSNAME=io.camunda.zeebe.exporter.ElasticsearchExporter
       - ZEEBE_BROKER_EXPORTERS_ELASTICSEARCH_ARGS_URL=http://elasticsearch:9200
@@ -42,11 +44,14 @@ services:
       start_period: 30s
 
   operate:
-    image: camunda/operate:8.5.0
+    image: camunda/operate:8.6.0
     environment:
       - CAMUNDA_OPERATE_ZEEBE_GATEWAYADDRESS=zeebe:26500
       - CAMUNDA_OPERATE_ELASTICSEARCH_URL=http://elasticsearch:9200
       - CAMUNDA_OPERATE_ZEEBEELASTICSEARCH_URL=http://elasticsearch:9200
+      - SPRING_PROFILES_ACTIVE=dev,auth
+      - CAMUNDA_OPERATE_IMPORTER_READERBACKOFF=1000
+      - CAMUNDA_OPERATE_IMPORTER_SCHEDULERBACKOFF=100
     ports:
       - "8081:8080"
     depends_on:
@@ -54,11 +59,13 @@ services:
         condition: service_healthy
 
   tasklist:
-    image: camunda/tasklist:8.5.0
+    image: camunda/tasklist:8.6.0
     environment:
       - CAMUNDA_TASKLIST_ZEEBE_GATEWAYADDRESS=zeebe:26500
       - CAMUNDA_TASKLIST_ELASTICSEARCH_URL=http://elasticsearch:9200
       - CAMUNDA_TASKLIST_ZEEBEELASTICSEARCH_URL=http://elasticsearch:9200
+      - CAMUNDA_TASKLIST_IMPORTER_READERBACKOFF=1000
+      - CAMUNDA_TASKLIST_IMPORTER_SCHEDULERBACKOFF=100
     ports:
       - "8082:8080"
     depends_on:
@@ -77,10 +84,11 @@ services:
       - -c
       - |
         apk add --no-cache curl
-        curl -L https://github.com/camunda-cloud/zeebe/releases/download/8.5.0/zbctl -o /usr/local/bin/zbctl
-        chmod +x /usr/local/bin/zbctl
         for f in /workflows/*.bpmn; do
           [ -f "$$f" ] || { echo 'No BPMN files found, skipping deploy'; break; }
           echo "Deploying $$f"
-          zbctl deploy "$$f" --address zeebe:26500 --insecure
+          curl -sf -X POST http://zeebe:8080/v2/deployments \
+            -H "Content-Type: multipart/form-data" \
+            -F "resources=@$$f;type=application/octet-stream" \
+            && echo "Deployed $$f" || echo "Failed to deploy $$f"
         done

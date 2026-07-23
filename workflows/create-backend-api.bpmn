@@ -44,18 +44,45 @@
       </startEvent>
 
       <serviceTask id="scaffold-repository" name="Scaffold Repository">
-        <documentation>docs/steps/scaffold-repository.md</documentation>
+        <documentation>## Getting Started
+
+Clones the **golden-path template** and pushes to a new repository under the
+organization namespace.
+
+- Sets default branch to `main`
+- Applies CODEOWNERS from the platform template
+- Enables required status checks
+
+> _Automated step — no manual intervention required._</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="scaffold-repository" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Clones the golden-path template and initializes a new org repository with branch protection and CI defaults." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-p1-start-to-scaffold-repo</incoming>
         <outgoing>flow-scaffold-repo-to-scaffold-project</outgoing>
       </serviceTask>
 
       <serviceTask id="scaffold-project" name="Scaffold Project">
-        <documentation>docs/steps/scaffold-project.md</documentation>
+        <documentation>## Project Scaffold
+
+Generates the initial project structure using `copier` with the platform
+answers file baked in from the process variables.
+
+**Output:** a fully-linted, commitlint-compliant skeleton ready for the
+tooling configuration phase.
+
+```
+copier copy gh:org/golden-path-api . \
+  --data service_id={{ serviceId }} \
+  --data team={{ teamName }}
+```</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="scaffold-project" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Generates the initial project skeleton from the copier template using process variable inputs." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-scaffold-repo-to-scaffold-project</incoming>
         <outgoing>flow-scaffold-project-to-tools-fork</outgoing>
@@ -72,45 +99,113 @@
       </parallelGateway>
 
       <serviceTask id="configure-sonarcloud" name="Configure SonarCloud">
-        <documentation>docs/steps/configure-sonarcloud.md</documentation>
+        <documentation>## SonarCloud Setup
+
+Registers the project with the SonarCloud organization and applies the
+default platform quality gate.
+
+```
+sonar.projectKey = {{ serviceId }}
+sonar.qualitygate.wait = true
+sonar.coverage.exclusions = **/generated/**
+```
+
+The quality gate threshold is set to **80 % coverage** with zero
+**Blocker** or **Critical** issues allowed.</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="configure-sonarcloud" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Registers the project in SonarCloud and applies the platform quality gate with 80% coverage threshold." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-fork-to-sonarcloud</incoming>
         <outgoing>flow-sonarcloud-to-tools-join</outgoing>
       </serviceTask>
 
       <serviceTask id="configure-snyk" name="Configure Snyk">
-        <documentation>docs/steps/configure-snyk.md</documentation>
+        <documentation>## Snyk Integration
+
+Imports the repository into the Snyk organization and sets the
+vulnerability severity threshold to **high**.
+
+Findings below this threshold are reported but will **not** block the
+pipeline.
+
+| Severity | Pipeline effect |
+|----------|-----------------|
+| Critical | Blocks          |
+| High     | Blocks          |
+| Medium   | Reports only    |
+| Low      | Ignored         |</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="configure-snyk" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Imports the repository into Snyk and configures high-severity blocking with medium/low as report-only." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-fork-to-snyk</incoming>
         <outgoing>flow-snyk-to-tools-join</outgoing>
       </serviceTask>
 
       <serviceTask id="configure-gitguardian" name="Configure GitGuardian">
-        <documentation>docs/steps/configure-gitguardian.md</documentation>
+        <documentation>## GitGuardian Secret Scanning
+
+Enables secret-scanning on the repository via the GitGuardian webhook
+integration. All commits to any branch are scanned in real time.
+
+**Policy:**
+- Detected secrets are reported to the `#security-alerts` Slack channel
+- Critical secrets block the pull request merge queue
+- Historical scan is triggered on first enable to catch pre-existing leaks</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="configure-gitguardian" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Enables real-time secret scanning via GitGuardian; critical detections block the PR merge queue." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-fork-to-gitguardian</incoming>
         <outgoing>flow-gitguardian-to-tools-join</outgoing>
       </serviceTask>
 
       <serviceTask id="configure-sentry" name="Configure Sentry">
-        <documentation>docs/steps/configure-sentry.md</documentation>
+        <documentation>## Sentry Project Creation
+
+Creates a Sentry project under the platform organization and injects
+`SENTRY_DSN` as a repository secret via the GitHub API.
+
+Error grouping fingerprint is set to `{{ module }}.{{ function }}` to
+prevent noise from unrelated callers.
+
+> The alert rules are intentionally left disabled here — they are
+> activated in Phase 4 once the Grafana dashboards are finalized.</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="configure-sentry" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Creates a Sentry project and injects SENTRY_DSN as a GitHub repository secret; alert rules activated later." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-fork-to-sentry</incoming>
         <outgoing>flow-sentry-to-tools-join</outgoing>
       </serviceTask>
 
       <serviceTask id="configure-grafana-cloud" name="Configure Grafana Cloud">
-        <documentation>docs/steps/configure-grafana-cloud.md</documentation>
+        <documentation>## Grafana Cloud Provisioning
+
+Provisions a Grafana Cloud stack and imports the _skeleton_ dashboard
+from the platform library.
+
+**What gets created:**
+- A Prometheus remote-write endpoint scoped to this service
+- The standard latency / error-rate / saturation (RED) dashboard
+- A placeholder on-call schedule linked to the team's PagerDuty rotation
+
+Alert rules are **disabled** at this stage — they require a live
+environment and are finalized in Phase 4.</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="configure-grafana-cloud" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Provisions Grafana Cloud stack with RED dashboard skeleton; alert rules are disabled until Phase 4." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-fork-to-grafana</incoming>
         <outgoing>flow-grafana-to-tools-join</outgoing>
@@ -127,18 +222,47 @@
       </parallelGateway>
 
       <serviceTask id="provision-infrastructure" name="Provision Infrastructure">
-        <documentation>docs/steps/provision-infrastructure.md</documentation>
+        <documentation>## Infrastructure Provisioning
+
+Runs the platform Terraform workspace for this service. Remote state is
+stored in the **platform S3 backend** with DynamoDB locking.
+
+Resources created in order:
+
+1. VPC attachment and security group rules
+2. RDS parameter group and subnet group
+3. ECS task definition skeleton (0 desired count until deploy)
+4. IAM role with least-privilege policy from the service manifest
+
+A `terraform plan` summary is written to the process variable
+`terraformPlanSummary` for audit purposes.</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="provision-infrastructure" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Runs Terraform to provision VPC, RDS, ECS, and IAM resources; plan summary stored as a process variable." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-tools-join-to-provision-infra</incoming>
         <outgoing>flow-provision-infra-to-deploy-staging</outgoing>
       </serviceTask>
 
       <serviceTask id="deploy-to-staging" name="Deploy to Staging">
-        <documentation>docs/steps/deploy-to-staging.md</documentation>
+        <documentation>## Staging Deployment
+
+Triggers the GitHub Actions release workflow targeting the `staging`
+environment.
+
+The deploy is considered successful when the ECS service reaches
+**STEADY_STATE** with zero task failures in the trailing 5-minute window.
+
+**Rollback:** if the health check fails, the previous task definition
+revision is re-activated automatically and the process variable
+`stagingDeployFailed` is set to `true`.</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="deploy-to-staging" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Triggers the GitHub Actions release to staging; succeeds when ECS reaches STEADY_STATE with no task failures." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-provision-infra-to-deploy-staging</incoming>
         <outgoing>flow-deploy-staging-to-phase1-end</outgoing>
@@ -184,9 +308,24 @@
       </parallelGateway>
 
       <userTask id="request-architecture-review" name="Request Architecture Review">
-        <documentation>docs/steps/request-architecture-review.md</documentation>
+        <documentation>## Architecture Review
+
+A platform engineer reviews the proposed service boundary, dependency
+graph, and data model against the platform standards.
+
+The reviewer must select one of the following outcomes before completing
+this task:
+
+- **`approved`** — service design meets standards; proceed
+- **`skipped`** — waived under the SLA exception policy (requires a
+  comment explaining the justification)
+
+_Expected SLA: 3 business days from task assignment._</documentation>
         <extensionElements>
           <zeebe:assignmentDefinition candidateGroups="architects" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Platform engineer reviews service design; must record approved or skipped with justification before completing." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-reviews-fork-to-arch-review</incoming>
         <outgoing>flow-arch-review-to-arch-gateway</outgoing>
@@ -206,9 +345,25 @@
       </sequenceFlow>
 
       <userTask id="request-security-review" name="Request Security Review">
-        <documentation>docs/steps/request-security-review.md</documentation>
+        <documentation>## Initial Security Review
+
+The security team reviews the threat model and flags any pre-development
+concerns before code is written.
+
+**Checklist for reviewers:**
+- [ ] Trust boundaries are correctly identified
+- [ ] Sensitive data flows are documented
+- [ ] Authentication and authorization strategy is defined
+- [ ] Third-party dependencies have been assessed
+
+> If no security engineer is available within **5 business days**, this
+> step may be skipped via the SLA waiver process — record the waiver
+> ticket number in the task comment.</documentation>
         <extensionElements>
           <zeebe:assignmentDefinition candidateGroups="security" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Security team reviews the threat model pre-development; can be waived with SLA ticket if unavailable within 5 days." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-reviews-fork-to-security-review</incoming>
         <outgoing>flow-security-review-to-security-gateway</outgoing>
@@ -259,9 +414,22 @@
       </startEvent>
 
       <userTask id="develop-project" name="Develop Project">
-        <documentation>docs/steps/develop-project.md</documentation>
+        <documentation>## Development Phase
+
+The assigned team implements the service against the agreed interface
+contract established during the architecture review.
+
+**Definition of Done:**
+- All acceptance criteria in the linked Jira epic are closed
+- Code coverage ≥ 80 % (enforced by SonarCloud gate in Phase 4)
+- Zero `TODO` or `FIXME` comments remain in production code paths
+- `ruff check .` and `mypy --strict` pass with no suppressions
+- CHANGELOG entry added under `[Unreleased]`</documentation>
         <extensionElements>
           <zeebe:assignmentDefinition candidateGroups="developers" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Team implements the service to the agreed interface contract; DoD includes 80% coverage, clean linting, and closed Jira criteria." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-p3-start-to-develop</incoming>
         <outgoing>flow-develop-to-develop-gateway</outgoing>
@@ -281,9 +449,29 @@
       </sequenceFlow>
 
       <userTask id="write-unit-tests" name="Write Unit Tests">
-        <documentation>docs/steps/write-unit-tests.md</documentation>
+        <documentation>## Unit Tests
+
+Authors write unit tests targeting **isolated business logic** with no
+network or database calls.
+
+**Tooling:**
+- `pytest` as the test runner
+- `pytest-mock` for dependency injection
+- `hypothesis` for property-based edge cases on data-transformation code
+
+Run locally with:
+
+```bash
+uv run pytest tests/unit/ --cov=src --cov-report=term-missing
+```
+
+Tests must pass in under **30 seconds** — anything slower indicates a
+missing mock.</documentation>
         <extensionElements>
           <zeebe:assignmentDefinition candidateGroups="developers" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Developers write isolated unit tests using pytest and hypothesis; suite must run under 30 seconds with no I/O calls." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-develop-approved</incoming>
         <incoming>flow-develop-skipped</incoming>
@@ -304,9 +492,24 @@
       </sequenceFlow>
 
       <userTask id="write-e2e-tests" name="Write End-to-End Tests">
-        <documentation>docs/steps/write-e2e-tests.md</documentation>
+        <documentation>## End-to-End Tests
+
+Covers the critical user journeys defined in the PRD using the real
+staging environment provisioned in Phase 1.
+
+**Scope:** at minimum one happy-path and one negative-path scenario per
+public API endpoint.
+
+Tests live under `tests/e2e/` and are tagged `@smoke` so the CD pipeline
+can run them as a post-deploy gate.
+
+> E2E tests **must not** use mocks — they exist precisely to catch
+> integration failures that unit tests cannot detect.</documentation>
         <extensionElements>
           <zeebe:assignmentDefinition candidateGroups="developers" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Real-environment E2E tests covering happy and negative paths per endpoint; tagged @smoke for the CD post-deploy gate." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-unit-tests-approved</incoming>
         <incoming>flow-unit-tests-skipped</incoming>
@@ -363,9 +566,23 @@
            SONARCLOUD: check threshold -> wait if breached -> loop
            - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
       <serviceTask id="check-sonarcloud-threshold" name="Check SonarCloud Threshold">
-        <documentation>docs/steps/check-sonarcloud-threshold.md</documentation>
+        <documentation>## SonarCloud Quality Gate Check
+
+Polls the SonarCloud API for the latest analysis result on the `main`
+branch.
+
+**Output variables:**
+- `sonarcloudThresholdClear` — `true` if all gate conditions pass,
+  `false` if the gate is **FAILED** or **WARN**
+
+If the gate is breached, the process waits on the
+`sonarcloud-threshold-cleared` message and re-checks when the worker
+sends the callback after the team resolves the findings.</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="check-sonarcloud-threshold" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Polls SonarCloud API for main branch gate status; sets sonarcloudThresholdClear variable to drive the gateway." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-scans-fork-to-sonarcloud-check</incoming>
         <incoming>flow-sonarcloud-catch-to-recheck</incoming>
@@ -398,9 +615,23 @@
            SNYK: check threshold -> wait if breached -> loop
            - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
       <serviceTask id="check-snyk-threshold" name="Check Snyk Threshold">
-        <documentation>docs/steps/check-snyk-threshold.md</documentation>
+        <documentation>## Snyk Vulnerability Gate
+
+Queries the Snyk project for open issues at **high** severity or above.
+
+**Output variables:**
+- `snykThresholdClear` — `true` when zero blocking issues remain
+
+This task loops until the count reaches zero or a manual exemption has
+been recorded in Snyk (which excludes the issue from the API count).
+
+> Medium and low issues do not affect this gate but are still visible
+> in the Snyk dashboard.</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="check-snyk-threshold" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Queries Snyk for high/critical open issues; loops until count is zero or exemptions cover all remaining findings." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-scans-fork-to-snyk-check</incoming>
         <incoming>flow-snyk-catch-to-recheck</incoming>
@@ -433,9 +664,25 @@
            GITGUARDIAN: check threshold -> wait if breached -> loop
            - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
       <serviceTask id="check-gitguardian-threshold" name="Check GitGuardian Threshold">
-        <documentation>docs/steps/check-gitguardian-threshold.md</documentation>
+        <documentation>## Secret Scan Gate
+
+Verifies that GitGuardian reports **zero** open incidents for the
+repository.
+
+Active incidents must be either:
+- Resolved (secret rotated and invalidated)
+- Marked _non-exploitable_ with a written justification
+
+**Output variables:**
+- `gitguardianThresholdClear` — `true` when the open incident count is 0
+
+The process waits on the `gitguardian-threshold-cleared` message and
+re-checks when the worker confirms all incidents are closed.</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="check-gitguardian-threshold" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Verifies zero open GitGuardian incidents; incidents must be resolved or marked non-exploitable before gate clears." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-scans-fork-to-gitguardian-check</incoming>
         <incoming>flow-gitguardian-catch-to-recheck</incoming>
@@ -468,9 +715,21 @@
            GRAFANA CLOUD: finalize alerting and dashboards (needs running app)
            - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
       <serviceTask id="finalize-grafana-cloud" name="Finalize Grafana Cloud">
-        <documentation>docs/steps/finalize-grafana-cloud.md</documentation>
+        <documentation>## Grafana Cloud Finalization
+
+Activates the alert rules now that a live staging environment is available
+and metrics are flowing.
+
+**Actions performed:**
+- Enables the RED alert rules (latency p99 > 500 ms, error rate > 1 %)
+- Imports the **SLO dashboard** with the 99.9 % availability target
+- Links the Sentry project to the error-rate panel for drill-down
+- Sends a test notification to confirm PagerDuty routing is correct</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="finalize-grafana-cloud" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Activates Grafana alert rules, imports SLO dashboard, and verifies PagerDuty routing once live metrics are available." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-scans-fork-to-finalize-grafana</incoming>
         <outgoing>flow-finalize-grafana-to-scans-join</outgoing>
@@ -486,9 +745,25 @@
       </parallelGateway>
 
       <userTask id="request-security-signoff" name="Request Security Sign-off">
-        <documentation>docs/steps/request-security-signoff.md</documentation>
+        <documentation>## Security Sign-off
+
+A security engineer performs a final review of the scan results from all
+three gates (SonarCloud, Snyk, GitGuardian) and confirms the service is
+safe to promote to production.
+
+**This is a mandatory gate — it cannot be skipped.**
+
+The reviewer must confirm:
+- [ ] All gate findings have been resolved or formally exempted
+- [ ] No new high/critical CVEs have appeared since the last scan
+- [ ] The Sentry DSN is operational and receiving events from staging
+
+Record the sign-off by setting `securitySignoffOutcome = "approved"`.</documentation>
         <extensionElements>
           <zeebe:assignmentDefinition candidateGroups="security" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Mandatory security sign-off reviewing all scan gates before production promotion; cannot be skipped or waived." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-scans-join-to-security-signoff</incoming>
         <outgoing>flow-security-signoff-to-gateway</outgoing>
@@ -537,18 +812,50 @@
       </startEvent>
 
       <serviceTask id="deploy-to-production" name="Deploy to Production">
-        <documentation>docs/steps/deploy-to-production.md</documentation>
+        <documentation>## Production Deployment
+
+Runs the release pipeline targeting the `production` environment using a
+**blue-green** deployment strategy.
+
+```yaml
+channel: stable
+strategy: blue-green
+traffic_shift: linear-10-percent-every-1-minute
+rollback_on: DEPLOYMENT_STOP_ON_ALARM
+cooldown: 5m
+```
+
+The old task set is drained for 5 minutes before termination to allow
+in-flight requests to complete.</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="deploy-to-production" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Blue-green production deploy with linear 10%-per-minute traffic shift and automatic rollback on CloudWatch alarm." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-p5-start-to-deploy-prod</incoming>
         <outgoing>flow-deploy-prod-to-health-check</outgoing>
       </serviceTask>
 
       <serviceTask id="post-deploy-health-check" name="Post-Deploy Health Check">
-        <documentation>docs/steps/post-deploy-health-check.md</documentation>
+        <documentation>## Post-Deploy Health Check
+
+Validates that the production deployment is healthy before the process
+completes.
+
+**Checks performed:**
+1. `GET /health` returns **200 OK** within 30 s (retried up to 3×)
+2. Sentry DSN is receiving events (at least one event in the last 60 s)
+3. At least one Prometheus metric is ingesting into Grafana Cloud
+4. No ECS task has exited with a non-zero code in the last 5 minutes
+
+If any check fails the task raises an incident and the process is paused
+pending manual intervention.</documentation>
         <extensionElements>
           <zeebe:taskDefinition type="post-deploy-health-check" />
+          <zeebe:properties>
+            <zeebe:property name="description" value="Validates production health via /health endpoint, Sentry event ingestion, Grafana metrics, and ECS task stability." />
+          </zeebe:properties>
         </extensionElements>
         <incoming>flow-deploy-prod-to-health-check</incoming>
         <outgoing>flow-health-check-to-phase5-end</outgoing>
@@ -575,5 +882,409 @@
     <sequenceFlow id="flow-phase5-to-end" sourceRef="phase-5-production" targetRef="end" />
 
   </process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="create-backend-api">
+
+      <!-- Top-level shapes -->
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <dc:Bounds x="152" y="392" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="128" y="435" width="85" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase-1-provision-project_di" bpmnElement="phase-1-provision-project" isExpanded="true">
+        <dc:Bounds x="230" y="60" width="1100" height="700" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase-2-initial-reviews_di" bpmnElement="phase-2-initial-reviews" isExpanded="true">
+        <dc:Bounds x="1390" y="160" width="700" height="500" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase-3-development_di" bpmnElement="phase-3-development" isExpanded="true">
+        <dc:Bounds x="2150" y="160" width="900" height="400" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase-4-security-findings_di" bpmnElement="phase-4-security-findings" isExpanded="true">
+        <dc:Bounds x="3100" y="60" width="1100" height="700" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase-5-production_di" bpmnElement="phase-5-production" isExpanded="true">
+        <dc:Bounds x="4250" y="200" width="500" height="420" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_di" bpmnElement="end">
+        <dc:Bounds x="4812" y="392" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="4788" y="435" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Top-level sequence flows -->
+      <bpmndi:BPMNEdge id="flow-start-to-phase1_di" bpmnElement="flow-start-to-phase1">
+        <di:waypoint x="188" y="410" /><di:waypoint x="230" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-phase1-to-phase2_di" bpmnElement="flow-phase1-to-phase2">
+        <di:waypoint x="1330" y="410" /><di:waypoint x="1390" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-phase2-to-phase3_di" bpmnElement="flow-phase2-to-phase3">
+        <di:waypoint x="2090" y="410" /><di:waypoint x="2150" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-phase3-to-phase4_di" bpmnElement="flow-phase3-to-phase4">
+        <di:waypoint x="3050" y="410" /><di:waypoint x="3100" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-phase4-to-phase5_di" bpmnElement="flow-phase4-to-phase5">
+        <di:waypoint x="4200" y="410" /><di:waypoint x="4250" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-phase5-to-end_di" bpmnElement="flow-phase5-to-end">
+        <di:waypoint x="4750" y="410" /><di:waypoint x="4812" y="410" />
+      </bpmndi:BPMNEdge>
+
+      <!-- PHASE 1 internal (subprocess x=230 y=60 w=1100 h=700) -->
+      <bpmndi:BPMNShape id="phase1-start_di" bpmnElement="phase1-start">
+        <dc:Bounds x="270" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="scaffold-repository_di" bpmnElement="scaffold-repository">
+        <dc:Bounds x="350" y="368" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="scaffold-project_di" bpmnElement="scaffold-project">
+        <dc:Bounds x="490" y="368" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="tools-fork_di" bpmnElement="tools-fork">
+        <dc:Bounds x="630" y="383" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="610" y="440" width="90" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="configure-sonarcloud_di" bpmnElement="configure-sonarcloud">
+        <dc:Bounds x="740" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="configure-snyk_di" bpmnElement="configure-snyk">
+        <dc:Bounds x="740" y="240" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="configure-gitguardian_di" bpmnElement="configure-gitguardian">
+        <dc:Bounds x="740" y="368" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="configure-sentry_di" bpmnElement="configure-sentry">
+        <dc:Bounds x="740" y="490" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="configure-grafana-cloud_di" bpmnElement="configure-grafana-cloud">
+        <dc:Bounds x="740" y="620" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="tools-join_di" bpmnElement="tools-join">
+        <dc:Bounds x="900" y="383" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="provision-infrastructure_di" bpmnElement="provision-infrastructure">
+        <dc:Bounds x="990" y="368" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="deploy-to-staging_di" bpmnElement="deploy-to-staging">
+        <dc:Bounds x="1130" y="368" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase1-end_di" bpmnElement="phase1-end">
+        <dc:Bounds x="1272" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow-p1-start-to-scaffold-repo_di" bpmnElement="flow-p1-start-to-scaffold-repo">
+        <di:waypoint x="306" y="410" /><di:waypoint x="350" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-scaffold-repo-to-scaffold-project_di" bpmnElement="flow-scaffold-repo-to-scaffold-project">
+        <di:waypoint x="450" y="408" /><di:waypoint x="490" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-scaffold-project-to-tools-fork_di" bpmnElement="flow-scaffold-project-to-tools-fork">
+        <di:waypoint x="590" y="408" /><di:waypoint x="630" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-fork-to-sonarcloud_di" bpmnElement="flow-fork-to-sonarcloud">
+        <di:waypoint x="655" y="383" /><di:waypoint x="655" y="140" /><di:waypoint x="740" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-fork-to-snyk_di" bpmnElement="flow-fork-to-snyk">
+        <di:waypoint x="655" y="383" /><di:waypoint x="655" y="280" /><di:waypoint x="740" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-fork-to-gitguardian_di" bpmnElement="flow-fork-to-gitguardian">
+        <di:waypoint x="680" y="408" /><di:waypoint x="740" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-fork-to-sentry_di" bpmnElement="flow-fork-to-sentry">
+        <di:waypoint x="655" y="433" /><di:waypoint x="655" y="530" /><di:waypoint x="740" y="530" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-fork-to-grafana_di" bpmnElement="flow-fork-to-grafana">
+        <di:waypoint x="655" y="433" /><di:waypoint x="655" y="660" /><di:waypoint x="740" y="660" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-sonarcloud-to-tools-join_di" bpmnElement="flow-sonarcloud-to-tools-join">
+        <di:waypoint x="840" y="140" /><di:waypoint x="925" y="140" /><di:waypoint x="925" y="383" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-snyk-to-tools-join_di" bpmnElement="flow-snyk-to-tools-join">
+        <di:waypoint x="840" y="280" /><di:waypoint x="925" y="280" /><di:waypoint x="925" y="383" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-gitguardian-to-tools-join_di" bpmnElement="flow-gitguardian-to-tools-join">
+        <di:waypoint x="840" y="408" /><di:waypoint x="900" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-sentry-to-tools-join_di" bpmnElement="flow-sentry-to-tools-join">
+        <di:waypoint x="840" y="530" /><di:waypoint x="925" y="530" /><di:waypoint x="925" y="433" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-grafana-to-tools-join_di" bpmnElement="flow-grafana-to-tools-join">
+        <di:waypoint x="840" y="660" /><di:waypoint x="925" y="660" /><di:waypoint x="925" y="433" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-tools-join-to-provision-infra_di" bpmnElement="flow-tools-join-to-provision-infra">
+        <di:waypoint x="950" y="408" /><di:waypoint x="990" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-provision-infra-to-deploy-staging_di" bpmnElement="flow-provision-infra-to-deploy-staging">
+        <di:waypoint x="1090" y="408" /><di:waypoint x="1130" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-deploy-staging-to-phase1-end_di" bpmnElement="flow-deploy-staging-to-phase1-end">
+        <di:waypoint x="1230" y="408" /><di:waypoint x="1272" y="408" />
+      </bpmndi:BPMNEdge>
+
+      <!-- PHASE 2 internal (subprocess x=1390 y=160 w=700 h=500) -->
+      <bpmndi:BPMNShape id="phase2-start_di" bpmnElement="phase2-start">
+        <dc:Bounds x="1430" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="reviews-fork_di" bpmnElement="reviews-fork">
+        <dc:Bounds x="1520" y="383" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="request-architecture-review_di" bpmnElement="request-architecture-review">
+        <dc:Bounds x="1620" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="arch-review-gateway_di" bpmnElement="arch-review-gateway">
+        <dc:Bounds x="1775" y="265" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1755" y="322" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="request-security-review_di" bpmnElement="request-security-review">
+        <dc:Bounds x="1620" y="490" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="initial-security-review-gateway_di" bpmnElement="initial-security-review-gateway">
+        <dc:Bounds x="1775" y="505" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1755" y="562" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="reviews-join_di" bpmnElement="reviews-join">
+        <dc:Bounds x="1940" y="383" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase2-end_di" bpmnElement="phase2-end">
+        <dc:Bounds x="2042" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow-p2-start-to-reviews-fork_di" bpmnElement="flow-p2-start-to-reviews-fork">
+        <di:waypoint x="1466" y="410" /><di:waypoint x="1520" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-reviews-fork-to-arch-review_di" bpmnElement="flow-reviews-fork-to-arch-review">
+        <di:waypoint x="1545" y="383" /><di:waypoint x="1545" y="290" /><di:waypoint x="1620" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-reviews-fork-to-security-review_di" bpmnElement="flow-reviews-fork-to-security-review">
+        <di:waypoint x="1545" y="433" /><di:waypoint x="1545" y="530" /><di:waypoint x="1620" y="530" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-arch-review-to-arch-gateway_di" bpmnElement="flow-arch-review-to-arch-gateway">
+        <di:waypoint x="1720" y="290" /><di:waypoint x="1775" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-arch-approved_di" bpmnElement="flow-arch-approved">
+        <di:waypoint x="1825" y="290" /><di:waypoint x="1965" y="290" /><di:waypoint x="1965" y="383" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-arch-skipped_di" bpmnElement="flow-arch-skipped">
+        <di:waypoint x="1800" y="265" /><di:waypoint x="1800" y="240" /><di:waypoint x="1965" y="240" /><di:waypoint x="1965" y="383" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-security-review-to-security-gateway_di" bpmnElement="flow-security-review-to-security-gateway">
+        <di:waypoint x="1720" y="530" /><di:waypoint x="1775" y="530" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-initial-security-approved_di" bpmnElement="flow-initial-security-approved">
+        <di:waypoint x="1825" y="530" /><di:waypoint x="1965" y="530" /><di:waypoint x="1965" y="433" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-initial-security-skipped_di" bpmnElement="flow-initial-security-skipped">
+        <di:waypoint x="1800" y="555" /><di:waypoint x="1800" y="580" /><di:waypoint x="1965" y="580" /><di:waypoint x="1965" y="433" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-reviews-join-to-phase2-end_di" bpmnElement="flow-reviews-join-to-phase2-end">
+        <di:waypoint x="1990" y="408" /><di:waypoint x="2042" y="408" />
+      </bpmndi:BPMNEdge>
+
+      <!-- PHASE 3 internal (subprocess x=2150 y=160 w=900 h=400) -->
+      <bpmndi:BPMNShape id="phase3-start_di" bpmnElement="phase3-start">
+        <dc:Bounds x="2190" y="342" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="develop-project_di" bpmnElement="develop-project">
+        <dc:Bounds x="2270" y="320" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="develop-gateway_di" bpmnElement="develop-gateway">
+        <dc:Bounds x="2420" y="335" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2400" y="392" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="write-unit-tests_di" bpmnElement="write-unit-tests">
+        <dc:Bounds x="2520" y="320" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="unit-tests-gateway_di" bpmnElement="unit-tests-gateway">
+        <dc:Bounds x="2670" y="335" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2650" y="392" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="write-e2e-tests_di" bpmnElement="write-e2e-tests">
+        <dc:Bounds x="2770" y="320" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="e2e-tests-gateway_di" bpmnElement="e2e-tests-gateway">
+        <dc:Bounds x="2920" y="335" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2900" y="392" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase3-end_di" bpmnElement="phase3-end">
+        <dc:Bounds x="3002" y="342" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow-p3-start-to-develop_di" bpmnElement="flow-p3-start-to-develop">
+        <di:waypoint x="2226" y="360" /><di:waypoint x="2270" y="360" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-develop-to-develop-gateway_di" bpmnElement="flow-develop-to-develop-gateway">
+        <di:waypoint x="2370" y="360" /><di:waypoint x="2420" y="360" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-develop-approved_di" bpmnElement="flow-develop-approved">
+        <di:waypoint x="2470" y="360" /><di:waypoint x="2520" y="360" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-develop-skipped_di" bpmnElement="flow-develop-skipped">
+        <di:waypoint x="2445" y="335" /><di:waypoint x="2445" y="305" /><di:waypoint x="2520" y="305" /><di:waypoint x="2520" y="340" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-unit-tests-to-unit-tests-gateway_di" bpmnElement="flow-unit-tests-to-unit-tests-gateway">
+        <di:waypoint x="2620" y="360" /><di:waypoint x="2670" y="360" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-unit-tests-approved_di" bpmnElement="flow-unit-tests-approved">
+        <di:waypoint x="2720" y="360" /><di:waypoint x="2770" y="360" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-unit-tests-skipped_di" bpmnElement="flow-unit-tests-skipped">
+        <di:waypoint x="2695" y="335" /><di:waypoint x="2695" y="305" /><di:waypoint x="2770" y="305" /><di:waypoint x="2770" y="340" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-e2e-tests-to-e2e-gateway_di" bpmnElement="flow-e2e-tests-to-e2e-gateway">
+        <di:waypoint x="2870" y="360" /><di:waypoint x="2920" y="360" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-e2e-approved_di" bpmnElement="flow-e2e-approved">
+        <di:waypoint x="2970" y="360" /><di:waypoint x="3002" y="360" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-e2e-skipped_di" bpmnElement="flow-e2e-skipped">
+        <di:waypoint x="2945" y="335" /><di:waypoint x="2945" y="305" /><di:waypoint x="3020" y="305" /><di:waypoint x="3020" y="342" />
+      </bpmndi:BPMNEdge>
+
+      <!-- PHASE 4 internal (subprocess x=3100 y=60 w=1100 h=700) -->
+      <bpmndi:BPMNShape id="phase4-start_di" bpmnElement="phase4-start">
+        <dc:Bounds x="3140" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="scans-fork_di" bpmnElement="scans-fork">
+        <dc:Bounds x="3220" y="383" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="check-sonarcloud-threshold_di" bpmnElement="check-sonarcloud-threshold">
+        <dc:Bounds x="3320" y="90" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sonarcloud-threshold-gateway_di" bpmnElement="sonarcloud-threshold-gateway">
+        <dc:Bounds x="3475" y="105" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3455" y="162" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sonarcloud-threshold-catch_di" bpmnElement="sonarcloud-threshold-catch">
+        <dc:Bounds x="3592" y="112" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3568" y="155" width="85" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="check-snyk-threshold_di" bpmnElement="check-snyk-threshold">
+        <dc:Bounds x="3320" y="240" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="snyk-threshold-gateway_di" bpmnElement="snyk-threshold-gateway">
+        <dc:Bounds x="3475" y="255" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3455" y="312" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="snyk-threshold-catch_di" bpmnElement="snyk-threshold-catch">
+        <dc:Bounds x="3592" y="262" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3568" y="305" width="85" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="check-gitguardian-threshold_di" bpmnElement="check-gitguardian-threshold">
+        <dc:Bounds x="3320" y="368" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="gitguardian-threshold-gateway_di" bpmnElement="gitguardian-threshold-gateway">
+        <dc:Bounds x="3475" y="383" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3455" y="440" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="gitguardian-threshold-catch_di" bpmnElement="gitguardian-threshold-catch">
+        <dc:Bounds x="3592" y="390" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3568" y="433" width="85" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="finalize-grafana-cloud_di" bpmnElement="finalize-grafana-cloud">
+        <dc:Bounds x="3320" y="520" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="scans-join_di" bpmnElement="scans-join">
+        <dc:Bounds x="3680" y="383" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="request-security-signoff_di" bpmnElement="request-security-signoff">
+        <dc:Bounds x="3780" y="368" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="security-signoff-gateway_di" bpmnElement="security-signoff-gateway">
+        <dc:Bounds x="3935" y="383" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3915" y="440" width="90" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase4-end_di" bpmnElement="phase4-end">
+        <dc:Bounds x="4042" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow-p4-start-to-scans-fork_di" bpmnElement="flow-p4-start-to-scans-fork">
+        <di:waypoint x="3176" y="410" /><di:waypoint x="3220" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-scans-fork-to-sonarcloud-check_di" bpmnElement="flow-scans-fork-to-sonarcloud-check">
+        <di:waypoint x="3245" y="383" /><di:waypoint x="3245" y="130" /><di:waypoint x="3320" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-scans-fork-to-snyk-check_di" bpmnElement="flow-scans-fork-to-snyk-check">
+        <di:waypoint x="3245" y="383" /><di:waypoint x="3245" y="280" /><di:waypoint x="3320" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-scans-fork-to-gitguardian-check_di" bpmnElement="flow-scans-fork-to-gitguardian-check">
+        <di:waypoint x="3270" y="408" /><di:waypoint x="3320" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-scans-fork-to-finalize-grafana_di" bpmnElement="flow-scans-fork-to-finalize-grafana">
+        <di:waypoint x="3245" y="433" /><di:waypoint x="3245" y="560" /><di:waypoint x="3320" y="560" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-sonarcloud-check-to-gateway_di" bpmnElement="flow-sonarcloud-check-to-gateway">
+        <di:waypoint x="3420" y="130" /><di:waypoint x="3475" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-sonarcloud-clear_di" bpmnElement="flow-sonarcloud-clear">
+        <di:waypoint x="3525" y="130" /><di:waypoint x="3705" y="130" /><di:waypoint x="3705" y="383" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-sonarcloud-breached_di" bpmnElement="flow-sonarcloud-breached">
+        <di:waypoint x="3525" y="130" /><di:waypoint x="3592" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-sonarcloud-catch-to-recheck_di" bpmnElement="flow-sonarcloud-catch-to-recheck">
+        <di:waypoint x="3628" y="130" /><di:waypoint x="3660" y="130" /><di:waypoint x="3660" y="200" /><di:waypoint x="3300" y="200" /><di:waypoint x="3300" y="130" /><di:waypoint x="3320" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-snyk-check-to-gateway_di" bpmnElement="flow-snyk-check-to-gateway">
+        <di:waypoint x="3420" y="280" /><di:waypoint x="3475" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-snyk-clear_di" bpmnElement="flow-snyk-clear">
+        <di:waypoint x="3525" y="280" /><di:waypoint x="3705" y="280" /><di:waypoint x="3705" y="383" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-snyk-breached_di" bpmnElement="flow-snyk-breached">
+        <di:waypoint x="3525" y="280" /><di:waypoint x="3592" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-snyk-catch-to-recheck_di" bpmnElement="flow-snyk-catch-to-recheck">
+        <di:waypoint x="3628" y="280" /><di:waypoint x="3660" y="280" /><di:waypoint x="3660" y="350" /><di:waypoint x="3300" y="350" /><di:waypoint x="3300" y="280" /><di:waypoint x="3320" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-gitguardian-check-to-gateway_di" bpmnElement="flow-gitguardian-check-to-gateway">
+        <di:waypoint x="3420" y="408" /><di:waypoint x="3475" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-gitguardian-clear_di" bpmnElement="flow-gitguardian-clear">
+        <di:waypoint x="3525" y="408" /><di:waypoint x="3680" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-gitguardian-breached_di" bpmnElement="flow-gitguardian-breached">
+        <di:waypoint x="3525" y="408" /><di:waypoint x="3592" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-gitguardian-catch-to-recheck_di" bpmnElement="flow-gitguardian-catch-to-recheck">
+        <di:waypoint x="3628" y="408" /><di:waypoint x="3660" y="408" /><di:waypoint x="3660" y="500" /><di:waypoint x="3300" y="500" /><di:waypoint x="3300" y="408" /><di:waypoint x="3320" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-finalize-grafana-to-scans-join_di" bpmnElement="flow-finalize-grafana-to-scans-join">
+        <di:waypoint x="3420" y="560" /><di:waypoint x="3705" y="560" /><di:waypoint x="3705" y="433" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-scans-join-to-security-signoff_di" bpmnElement="flow-scans-join-to-security-signoff">
+        <di:waypoint x="3730" y="408" /><di:waypoint x="3780" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-security-signoff-to-gateway_di" bpmnElement="flow-security-signoff-to-gateway">
+        <di:waypoint x="3880" y="408" /><di:waypoint x="3935" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-security-signoff-approved_di" bpmnElement="flow-security-signoff-approved">
+        <di:waypoint x="3985" y="408" /><di:waypoint x="4042" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-security-signoff-skipped_di" bpmnElement="flow-security-signoff-skipped">
+        <di:waypoint x="3960" y="383" /><di:waypoint x="3960" y="360" /><di:waypoint x="4060" y="360" /><di:waypoint x="4060" y="392" />
+      </bpmndi:BPMNEdge>
+
+      <!-- PHASE 5 internal (subprocess x=4250 y=200 w=500 h=420) -->
+      <bpmndi:BPMNShape id="phase5-start_di" bpmnElement="phase5-start">
+        <dc:Bounds x="4292" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="deploy-to-production_di" bpmnElement="deploy-to-production">
+        <dc:Bounds x="4370" y="368" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="post-deploy-health-check_di" bpmnElement="post-deploy-health-check">
+        <dc:Bounds x="4520" y="368" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase5-end_di" bpmnElement="phase5-end">
+        <dc:Bounds x="4672" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow-p5-start-to-deploy-prod_di" bpmnElement="flow-p5-start-to-deploy-prod">
+        <di:waypoint x="4328" y="410" /><di:waypoint x="4370" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-deploy-prod-to-health-check_di" bpmnElement="flow-deploy-prod-to-health-check">
+        <di:waypoint x="4470" y="408" /><di:waypoint x="4520" y="408" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-health-check-to-phase5-end_di" bpmnElement="flow-health-check-to-phase5-end">
+        <di:waypoint x="4620" y="408" /><di:waypoint x="4672" y="408" />
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 
 </definitions>
