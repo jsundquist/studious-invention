@@ -37,6 +37,13 @@ class HistoryEntry(BaseModel):
     ended_at: str | None
 
 
+class TaskItem(BaseModel):
+    task_id: str
+    element_id: str
+    element_name: str | None
+    assignee: str | None
+
+
 class TaskCompleteRequest(BaseModel):
     outcome: Literal["approved", "skipped"]
     reason: str = ""

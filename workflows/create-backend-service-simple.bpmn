@@ -1,0 +1,590 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  targetNamespace="http://studious-invention/workflows"
+                  exporter="Claude" exporterVersion="1.0">
+
+  <bpmn:process id="create-backend-service-simple" name="Create Backend Service (Simple)" isExecutable="true">
+
+    <bpmn:startEvent id="start" name="Service Requested">
+      <bpmn:outgoing>flow-start-to-phase1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- ================================================================
+         PHASE 1: INITIALIZE REVIEWS
+         Parallel:
+           A) Create Threat Model Diagram → Create Application Architecture Review
+           B) Create Security Application Review
+           C) Setup SonarQube
+         ================================================================ -->
+    <bpmn:subProcess id="phase-1-initialize-reviews" name="Phase 1: Initialize Reviews">
+      <bpmn:incoming>flow-start-to-phase1</bpmn:incoming>
+      <bpmn:outgoing>flow-phase1-to-phase2</bpmn:outgoing>
+
+      <bpmn:startEvent id="phase1-start">
+        <bpmn:outgoing>flow-p1-start-to-fork</bpmn:outgoing>
+      </bpmn:startEvent>
+
+      <bpmn:parallelGateway id="p1-fork">
+        <bpmn:incoming>flow-p1-start-to-fork</bpmn:incoming>
+        <bpmn:outgoing>flow-p1-fork-to-threat-model</bpmn:outgoing>
+        <bpmn:outgoing>flow-p1-fork-to-security-review</bpmn:outgoing>
+        <bpmn:outgoing>flow-p1-fork-to-sonarqube</bpmn:outgoing>
+      </bpmn:parallelGateway>
+
+      <bpmn:userTask id="create-threat-model" name="Create Threat Model Diagram">
+        <bpmn:documentation>## Threat Model
+
+Document the trust boundaries and data flows for the new service using
+the **STRIDE** methodology.
+
+**Tooling:** OWASP Threat Dragon or the team draw.io template stored in
+the platform Confluence space.
+
+Outputs required before marking complete:
+- A diagram exported as `.png` attached to this task
+- A completed STRIDE matrix (even if all cells are N/A)</bpmn:documentation>
+        <bpmn:extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Create a STRIDE threat model diagram and matrix; attach PNG export and completed matrix before completing." />
+          </zeebe:properties>
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow-p1-fork-to-threat-model</bpmn:incoming>
+        <bpmn:outgoing>flow-threat-model-to-arch-review</bpmn:outgoing>
+      </bpmn:userTask>
+
+      <bpmn:userTask id="create-arch-review" name="Create Application Architecture Review">
+        <bpmn:documentation>## Architecture Review Board
+
+Present the threat model output to the Architecture Review Board (ARB)
+for sign-off.
+
+**Minimum attendees:**
+- 1 platform engineer
+- 1 security engineer
+- The service's tech lead
+
+The ARB decision and any conditions must be recorded as a comment on
+this task before it is completed.</bpmn:documentation>
+        <bpmn:extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Present threat model to ARB; minimum attendees are platform engineer, security engineer, and tech lead." />
+          </zeebe:properties>
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow-threat-model-to-arch-review</bpmn:incoming>
+        <bpmn:outgoing>flow-arch-review-to-p1-join</bpmn:outgoing>
+      </bpmn:userTask>
+
+      <bpmn:userTask id="create-security-app-review" name="Create Security Application Review">
+        <bpmn:documentation>## Security Application Review
+
+The security team performs a manual review of the application design
+against the **OWASP ASVS Level 2** checklist.
+
+Key areas covered:
+- Authentication and session management
+- Access control model
+- Input validation and output encoding
+- Secrets and cryptographic practices
+
+All findings are recorded in the security tracker and linked to this
+task before it is marked complete.</bpmn:documentation>
+        <bpmn:extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Security team reviews the design against OWASP ASVS Level 2; all findings must be tracked before completing." />
+          </zeebe:properties>
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow-p1-fork-to-security-review</bpmn:incoming>
+        <bpmn:outgoing>flow-security-review-to-p1-join</bpmn:outgoing>
+      </bpmn:userTask>
+
+      <bpmn:userTask id="setup-sonarqube" name="Setup SonarQube">
+        <bpmn:documentation>## SonarQube Configuration
+
+Adds the service to the shared SonarQube instance and configures the
+default quality profile for the project language.
+
+> **Note:** This workflow uses the internal SonarQube instance. For
+> new services consider the cloud-native SonarCloud path in the
+> `create-backend-api` workflow instead.
+
+The project token must be stored in Vault at
+`secret/ci/{{ serviceId }}/sonarqube`.</bpmn:documentation>
+        <bpmn:extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Adds the service to internal SonarQube with the default quality profile; stores project token in Vault." />
+          </zeebe:properties>
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow-p1-fork-to-sonarqube</bpmn:incoming>
+        <bpmn:outgoing>flow-sonarqube-to-p1-join</bpmn:outgoing>
+      </bpmn:userTask>
+
+      <bpmn:parallelGateway id="p1-join">
+        <bpmn:incoming>flow-arch-review-to-p1-join</bpmn:incoming>
+        <bpmn:incoming>flow-security-review-to-p1-join</bpmn:incoming>
+        <bpmn:incoming>flow-sonarqube-to-p1-join</bpmn:incoming>
+        <bpmn:outgoing>flow-p1-join-to-phase1-end</bpmn:outgoing>
+      </bpmn:parallelGateway>
+
+      <bpmn:endEvent id="phase1-end">
+        <bpmn:incoming>flow-p1-join-to-phase1-end</bpmn:incoming>
+      </bpmn:endEvent>
+
+      <bpmn:sequenceFlow id="flow-p1-start-to-fork"           sourceRef="phase1-start"              targetRef="p1-fork" />
+      <bpmn:sequenceFlow id="flow-p1-fork-to-threat-model"    sourceRef="p1-fork"                   targetRef="create-threat-model" />
+      <bpmn:sequenceFlow id="flow-p1-fork-to-security-review" sourceRef="p1-fork"                   targetRef="create-security-app-review" />
+      <bpmn:sequenceFlow id="flow-p1-fork-to-sonarqube"       sourceRef="p1-fork"                   targetRef="setup-sonarqube" />
+      <bpmn:sequenceFlow id="flow-threat-model-to-arch-review" sourceRef="create-threat-model"      targetRef="create-arch-review" />
+      <bpmn:sequenceFlow id="flow-arch-review-to-p1-join"     sourceRef="create-arch-review"        targetRef="p1-join" />
+      <bpmn:sequenceFlow id="flow-security-review-to-p1-join" sourceRef="create-security-app-review" targetRef="p1-join" />
+      <bpmn:sequenceFlow id="flow-sonarqube-to-p1-join"       sourceRef="setup-sonarqube"           targetRef="p1-join" />
+      <bpmn:sequenceFlow id="flow-p1-join-to-phase1-end"      sourceRef="p1-join"                   targetRef="phase1-end" />
+    </bpmn:subProcess>
+
+    <!-- ================================================================
+         PHASE 2: BUILD APPLICATION
+         Parallel:
+           A) Build Application
+           B) Write E2E Tests
+           C) Write Unit Tests
+         ================================================================ -->
+    <bpmn:subProcess id="phase-2-build-application" name="Phase 2: Build Application">
+      <bpmn:incoming>flow-phase1-to-phase2</bpmn:incoming>
+      <bpmn:outgoing>flow-phase2-to-phase3</bpmn:outgoing>
+
+      <bpmn:startEvent id="phase2-start">
+        <bpmn:outgoing>flow-p2-start-to-fork</bpmn:outgoing>
+      </bpmn:startEvent>
+
+      <bpmn:parallelGateway id="p2-fork">
+        <bpmn:incoming>flow-p2-start-to-fork</bpmn:incoming>
+        <bpmn:outgoing>flow-p2-fork-to-build</bpmn:outgoing>
+        <bpmn:outgoing>flow-p2-fork-to-e2e</bpmn:outgoing>
+        <bpmn:outgoing>flow-p2-fork-to-unit</bpmn:outgoing>
+      </bpmn:parallelGateway>
+
+      <bpmn:userTask id="build-application" name="Build Application">
+        <bpmn:documentation>## Application Build
+
+Developer implements the service skeleton based on the architecture
+review output from Phase 1.
+
+**Must pass before completing:**
+- `ruff check .` with zero violations
+- `mypy --strict` with no suppressions added beyond the baseline
+- All pre-commit hooks green on the feature branch
+- At least one passing integration test against a local Docker stack</bpmn:documentation>
+        <bpmn:extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Implement service skeleton; must pass ruff, mypy strict, pre-commit hooks, and one integration test before completing." />
+          </zeebe:properties>
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow-p2-fork-to-build</bpmn:incoming>
+        <bpmn:outgoing>flow-build-to-p2-join</bpmn:outgoing>
+      </bpmn:userTask>
+
+      <bpmn:userTask id="write-e2e-tests" name="Write E2E Tests">
+        <bpmn:documentation>## E2E Test Suite
+
+Write end-to-end tests covering the happy path and at least one
+negative-path scenario per public endpoint.
+
+Tests live under `tests/e2e/` and are tagged `@smoke` for the CD
+post-deploy gate.
+
+Run locally with:
+```bash
+uv run pytest tests/e2e/ -m smoke --base-url http://localhost:8000
+```</bpmn:documentation>
+        <bpmn:extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="E2E tests covering happy and negative paths per endpoint; tagged @smoke for CD gate, run against a local stack." />
+          </zeebe:properties>
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow-p2-fork-to-e2e</bpmn:incoming>
+        <bpmn:outgoing>flow-e2e-to-p2-join</bpmn:outgoing>
+      </bpmn:userTask>
+
+      <bpmn:userTask id="write-unit-tests" name="Write Unit Tests">
+        <bpmn:documentation>## Unit Test Coverage
+
+Target: **≥ 80 %** line coverage on all non-generated modules.
+
+Use `pytest-mock` for mocking external dependencies and avoid any
+real network or filesystem calls in unit tests.
+
+```bash
+uv run pytest tests/unit/ --cov=src --cov-fail-under=80
+```
+
+Coverage reports are uploaded to SonarQube automatically by CI.</bpmn:documentation>
+        <bpmn:extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Write unit tests targeting 80%+ coverage with pytest-mock; no real I/O calls; CI uploads results to SonarQube." />
+          </zeebe:properties>
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow-p2-fork-to-unit</bpmn:incoming>
+        <bpmn:outgoing>flow-unit-to-p2-join</bpmn:outgoing>
+      </bpmn:userTask>
+
+      <bpmn:parallelGateway id="p2-join">
+        <bpmn:incoming>flow-build-to-p2-join</bpmn:incoming>
+        <bpmn:incoming>flow-e2e-to-p2-join</bpmn:incoming>
+        <bpmn:incoming>flow-unit-to-p2-join</bpmn:incoming>
+        <bpmn:outgoing>flow-p2-join-to-phase2-end</bpmn:outgoing>
+      </bpmn:parallelGateway>
+
+      <bpmn:endEvent id="phase2-end">
+        <bpmn:incoming>flow-p2-join-to-phase2-end</bpmn:incoming>
+      </bpmn:endEvent>
+
+      <bpmn:sequenceFlow id="flow-p2-start-to-fork"     sourceRef="phase2-start"      targetRef="p2-fork" />
+      <bpmn:sequenceFlow id="flow-p2-fork-to-build"     sourceRef="p2-fork"           targetRef="build-application" />
+      <bpmn:sequenceFlow id="flow-p2-fork-to-e2e"       sourceRef="p2-fork"           targetRef="write-e2e-tests" />
+      <bpmn:sequenceFlow id="flow-p2-fork-to-unit"      sourceRef="p2-fork"           targetRef="write-unit-tests" />
+      <bpmn:sequenceFlow id="flow-build-to-p2-join"     sourceRef="build-application" targetRef="p2-join" />
+      <bpmn:sequenceFlow id="flow-e2e-to-p2-join"       sourceRef="write-e2e-tests"   targetRef="p2-join" />
+      <bpmn:sequenceFlow id="flow-unit-to-p2-join"      sourceRef="write-unit-tests"  targetRef="p2-join" />
+      <bpmn:sequenceFlow id="flow-p2-join-to-phase2-end" sourceRef="p2-join"          targetRef="phase2-end" />
+    </bpmn:subProcess>
+
+    <!-- ================================================================
+         PHASE 3: COMPLETE APPLICATION
+         Parallel:
+           A) Resolve Security Application Review Findings
+           B) Resolve SonarQube Findings
+           C) Deploy to Dev
+         ================================================================ -->
+    <bpmn:subProcess id="phase-3-complete-application" name="Phase 3: Complete Application">
+      <bpmn:incoming>flow-phase2-to-phase3</bpmn:incoming>
+      <bpmn:outgoing>flow-phase3-to-end</bpmn:outgoing>
+
+      <bpmn:startEvent id="phase3-start">
+        <bpmn:outgoing>flow-p3-start-to-fork</bpmn:outgoing>
+      </bpmn:startEvent>
+
+      <bpmn:parallelGateway id="p3-fork">
+        <bpmn:incoming>flow-p3-start-to-fork</bpmn:incoming>
+        <bpmn:outgoing>flow-p3-fork-to-resolve-security</bpmn:outgoing>
+        <bpmn:outgoing>flow-p3-fork-to-resolve-sonarqube</bpmn:outgoing>
+        <bpmn:outgoing>flow-p3-fork-to-deploy-dev</bpmn:outgoing>
+      </bpmn:parallelGateway>
+
+      <bpmn:userTask id="resolve-security-findings" name="Resolve Security Application Review Findings">
+        <bpmn:documentation>## Remediate Security Findings
+
+Address all **high** and **critical** findings raised during the security
+application review in Phase 1.
+
+Each finding must be linked to a resolved Jira ticket before this task
+is completed. Accepted dispositions:
+
+- **Fixed** — code change merged and verified
+- **Mitigated** — compensating control documented
+- **Accepted** — risk accepted by the CISO in writing</bpmn:documentation>
+        <bpmn:extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Resolve all high/critical security findings; each needs a Jira ticket with fixed, mitigated, or CISO-accepted disposition." />
+          </zeebe:properties>
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow-p3-fork-to-resolve-security</bpmn:incoming>
+        <bpmn:outgoing>flow-resolve-security-to-p3-join</bpmn:outgoing>
+      </bpmn:userTask>
+
+      <bpmn:userTask id="resolve-sonarqube-findings" name="Resolve SonarQube Findings">
+        <bpmn:documentation>## SonarQube Remediation
+
+Resolve all issues that breach the quality gate:
+
+- **Blocker** issues — must be fixed, no exceptions
+- **Critical** issues — must be fixed or formally suppressed
+- **Coverage &lt; 80 %** — add tests until the threshold is met
+
+Issues marked _Won't Fix_ require a tech-lead comment explaining the
+business justification.</bpmn:documentation>
+        <bpmn:extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Resolve SonarQube blockers and criticals and reach 80% coverage; Won't Fix decisions require tech-lead justification." />
+          </zeebe:properties>
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow-p3-fork-to-resolve-sonarqube</bpmn:incoming>
+        <bpmn:outgoing>flow-resolve-sonarqube-to-p3-join</bpmn:outgoing>
+      </bpmn:userTask>
+
+      <bpmn:userTask id="deploy-to-dev" name="Deploy to Dev">
+        <bpmn:documentation>## Dev Environment Deploy
+
+Deploys the first working build to the shared `dev` environment using
+the platform CI job.
+
+Smoke tests run automatically post-deploy and results are posted to the
+`#deployments` Slack channel.
+
+> The `dev` environment is **shared** — coordinate with other teams
+> before deploying if you expect destructive schema migrations.</bpmn:documentation>
+        <bpmn:extensionElements>
+          <zeebe:properties>
+            <zeebe:property name="description" value="Deploys to the shared dev environment; smoke tests run automatically and post results to #deployments Slack." />
+          </zeebe:properties>
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow-p3-fork-to-deploy-dev</bpmn:incoming>
+        <bpmn:outgoing>flow-deploy-dev-to-p3-join</bpmn:outgoing>
+      </bpmn:userTask>
+
+      <bpmn:parallelGateway id="p3-join">
+        <bpmn:incoming>flow-resolve-security-to-p3-join</bpmn:incoming>
+        <bpmn:incoming>flow-resolve-sonarqube-to-p3-join</bpmn:incoming>
+        <bpmn:incoming>flow-deploy-dev-to-p3-join</bpmn:incoming>
+        <bpmn:outgoing>flow-p3-join-to-phase3-end</bpmn:outgoing>
+      </bpmn:parallelGateway>
+
+      <bpmn:endEvent id="phase3-end">
+        <bpmn:incoming>flow-p3-join-to-phase3-end</bpmn:incoming>
+      </bpmn:endEvent>
+
+      <bpmn:sequenceFlow id="flow-p3-start-to-fork"            sourceRef="phase3-start"               targetRef="p3-fork" />
+      <bpmn:sequenceFlow id="flow-p3-fork-to-resolve-security"  sourceRef="p3-fork"                   targetRef="resolve-security-findings" />
+      <bpmn:sequenceFlow id="flow-p3-fork-to-resolve-sonarqube" sourceRef="p3-fork"                   targetRef="resolve-sonarqube-findings" />
+      <bpmn:sequenceFlow id="flow-p3-fork-to-deploy-dev"        sourceRef="p3-fork"                   targetRef="deploy-to-dev" />
+      <bpmn:sequenceFlow id="flow-resolve-security-to-p3-join"  sourceRef="resolve-security-findings" targetRef="p3-join" />
+      <bpmn:sequenceFlow id="flow-resolve-sonarqube-to-p3-join" sourceRef="resolve-sonarqube-findings" targetRef="p3-join" />
+      <bpmn:sequenceFlow id="flow-deploy-dev-to-p3-join"        sourceRef="deploy-to-dev"             targetRef="p3-join" />
+      <bpmn:sequenceFlow id="flow-p3-join-to-phase3-end"        sourceRef="p3-join"                   targetRef="phase3-end" />
+    </bpmn:subProcess>
+
+    <bpmn:endEvent id="end" name="Service Complete">
+      <bpmn:incoming>flow-phase3-to-end</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="flow-start-to-phase1"  sourceRef="start"                        targetRef="phase-1-initialize-reviews" />
+    <bpmn:sequenceFlow id="flow-phase1-to-phase2" sourceRef="phase-1-initialize-reviews"   targetRef="phase-2-build-application" />
+    <bpmn:sequenceFlow id="flow-phase2-to-phase3" sourceRef="phase-2-build-application"    targetRef="phase-3-complete-application" />
+    <bpmn:sequenceFlow id="flow-phase3-to-end"    sourceRef="phase-3-complete-application" targetRef="end" />
+
+  </bpmn:process>
+
+  <!-- ================================================================
+       DIAGRAM INTERCHANGE
+       Main flow at y=410. Subprocess rows: top=180, mid=410, bot=640.
+       All coordinates are absolute.
+       ================================================================ -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="create-backend-service-simple">
+
+      <!-- ── TOP-LEVEL ELEMENTS ── -->
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <dc:Bounds x="152" y="392" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="128" y="435" width="85" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="phase-1-initialize-reviews_di" bpmnElement="phase-1-initialize-reviews" isExpanded="true">
+        <dc:Bounds x="230" y="60" width="1000" height="700" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="phase-2-build-application_di" bpmnElement="phase-2-build-application" isExpanded="true">
+        <dc:Bounds x="1290" y="160" width="560" height="500" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="phase-3-complete-application_di" bpmnElement="phase-3-complete-application" isExpanded="true">
+        <dc:Bounds x="1910" y="60" width="700" height="700" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="end_di" bpmnElement="end">
+        <dc:Bounds x="2672" y="392" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2648" y="435" width="85" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- top-level sequence flows -->
+      <bpmndi:BPMNEdge id="flow-start-to-phase1_di" bpmnElement="flow-start-to-phase1">
+        <di:waypoint x="188" y="410" /><di:waypoint x="230" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-phase1-to-phase2_di" bpmnElement="flow-phase1-to-phase2">
+        <di:waypoint x="1230" y="410" /><di:waypoint x="1290" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-phase2-to-phase3_di" bpmnElement="flow-phase2-to-phase3">
+        <di:waypoint x="1850" y="410" /><di:waypoint x="1910" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-phase3-to-end_di" bpmnElement="flow-phase3-to-end">
+        <di:waypoint x="2610" y="410" /><di:waypoint x="2672" y="410" />
+      </bpmndi:BPMNEdge>
+
+      <!-- ── PHASE 1 INTERNAL ──
+           subprocess: x=230 y=60 w=1000 h=700  (right edge x=1230)
+           branch rows: top y=180, mid y=410, bot y=640
+      -->
+      <bpmndi:BPMNShape id="phase1-start_di" bpmnElement="phase1-start">
+        <dc:Bounds x="272" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="p1-fork_di" bpmnElement="p1-fork">
+        <dc:Bounds x="355" y="385" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="create-threat-model_di" bpmnElement="create-threat-model">
+        <dc:Bounds x="450" y="140" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="create-arch-review_di" bpmnElement="create-arch-review">
+        <dc:Bounds x="610" y="140" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="create-security-app-review_di" bpmnElement="create-security-app-review">
+        <dc:Bounds x="450" y="370" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="setup-sonarqube_di" bpmnElement="setup-sonarqube">
+        <dc:Bounds x="450" y="600" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="p1-join_di" bpmnElement="p1-join">
+        <dc:Bounds x="785" y="385" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase1-end_di" bpmnElement="phase1-end">
+        <dc:Bounds x="882" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="flow-p1-start-to-fork_di" bpmnElement="flow-p1-start-to-fork">
+        <di:waypoint x="308" y="410" /><di:waypoint x="355" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p1-fork-to-threat-model_di" bpmnElement="flow-p1-fork-to-threat-model">
+        <di:waypoint x="380" y="385" /><di:waypoint x="380" y="180" /><di:waypoint x="450" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p1-fork-to-security-review_di" bpmnElement="flow-p1-fork-to-security-review">
+        <di:waypoint x="405" y="410" /><di:waypoint x="450" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p1-fork-to-sonarqube_di" bpmnElement="flow-p1-fork-to-sonarqube">
+        <di:waypoint x="380" y="435" /><di:waypoint x="380" y="640" /><di:waypoint x="450" y="640" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-threat-model-to-arch-review_di" bpmnElement="flow-threat-model-to-arch-review">
+        <di:waypoint x="550" y="180" /><di:waypoint x="610" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-arch-review-to-p1-join_di" bpmnElement="flow-arch-review-to-p1-join">
+        <di:waypoint x="710" y="180" /><di:waypoint x="810" y="180" /><di:waypoint x="810" y="385" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-security-review-to-p1-join_di" bpmnElement="flow-security-review-to-p1-join">
+        <di:waypoint x="550" y="410" /><di:waypoint x="785" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-sonarqube-to-p1-join_di" bpmnElement="flow-sonarqube-to-p1-join">
+        <di:waypoint x="550" y="640" /><di:waypoint x="810" y="640" /><di:waypoint x="810" y="435" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p1-join-to-phase1-end_di" bpmnElement="flow-p1-join-to-phase1-end">
+        <di:waypoint x="835" y="410" /><di:waypoint x="882" y="410" />
+      </bpmndi:BPMNEdge>
+
+      <!-- ── PHASE 2 INTERNAL ──
+           subprocess: x=1290 y=160 w=560 h=500  (right edge x=1850)
+           branch rows: top y=250, mid y=410, bot y=570
+      -->
+      <bpmndi:BPMNShape id="phase2-start_di" bpmnElement="phase2-start">
+        <dc:Bounds x="1332" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="p2-fork_di" bpmnElement="p2-fork">
+        <dc:Bounds x="1415" y="385" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="build-application_di" bpmnElement="build-application">
+        <dc:Bounds x="1510" y="210" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="write-e2e-tests_di" bpmnElement="write-e2e-tests">
+        <dc:Bounds x="1510" y="370" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="write-unit-tests_di" bpmnElement="write-unit-tests">
+        <dc:Bounds x="1510" y="530" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="p2-join_di" bpmnElement="p2-join">
+        <dc:Bounds x="1665" y="385" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase2-end_di" bpmnElement="phase2-end">
+        <dc:Bounds x="1762" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="flow-p2-start-to-fork_di" bpmnElement="flow-p2-start-to-fork">
+        <di:waypoint x="1368" y="410" /><di:waypoint x="1415" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p2-fork-to-build_di" bpmnElement="flow-p2-fork-to-build">
+        <di:waypoint x="1440" y="385" /><di:waypoint x="1440" y="250" /><di:waypoint x="1510" y="250" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p2-fork-to-e2e_di" bpmnElement="flow-p2-fork-to-e2e">
+        <di:waypoint x="1465" y="410" /><di:waypoint x="1510" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p2-fork-to-unit_di" bpmnElement="flow-p2-fork-to-unit">
+        <di:waypoint x="1440" y="435" /><di:waypoint x="1440" y="570" /><di:waypoint x="1510" y="570" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-build-to-p2-join_di" bpmnElement="flow-build-to-p2-join">
+        <di:waypoint x="1610" y="250" /><di:waypoint x="1690" y="250" /><di:waypoint x="1690" y="385" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-e2e-to-p2-join_di" bpmnElement="flow-e2e-to-p2-join">
+        <di:waypoint x="1610" y="410" /><di:waypoint x="1665" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-unit-to-p2-join_di" bpmnElement="flow-unit-to-p2-join">
+        <di:waypoint x="1610" y="570" /><di:waypoint x="1690" y="570" /><di:waypoint x="1690" y="435" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p2-join-to-phase2-end_di" bpmnElement="flow-p2-join-to-phase2-end">
+        <di:waypoint x="1715" y="410" /><di:waypoint x="1762" y="410" />
+      </bpmndi:BPMNEdge>
+
+      <!-- ── PHASE 3 INTERNAL ──
+           subprocess: x=1910 y=60 w=700 h=700  (right edge x=2610)
+           branch rows: top y=180, mid y=410, bot y=640
+      -->
+      <bpmndi:BPMNShape id="phase3-start_di" bpmnElement="phase3-start">
+        <dc:Bounds x="1952" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="p3-fork_di" bpmnElement="p3-fork">
+        <dc:Bounds x="2035" y="385" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="resolve-security-findings_di" bpmnElement="resolve-security-findings">
+        <dc:Bounds x="2130" y="140" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="resolve-sonarqube-findings_di" bpmnElement="resolve-sonarqube-findings">
+        <dc:Bounds x="2130" y="370" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="deploy-to-dev_di" bpmnElement="deploy-to-dev">
+        <dc:Bounds x="2130" y="600" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="p3-join_di" bpmnElement="p3-join">
+        <dc:Bounds x="2395" y="385" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="phase3-end_di" bpmnElement="phase3-end">
+        <dc:Bounds x="2492" y="392" width="36" height="36" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="flow-p3-start-to-fork_di" bpmnElement="flow-p3-start-to-fork">
+        <di:waypoint x="1988" y="410" /><di:waypoint x="2035" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p3-fork-to-resolve-security_di" bpmnElement="flow-p3-fork-to-resolve-security">
+        <di:waypoint x="2060" y="385" /><di:waypoint x="2060" y="180" /><di:waypoint x="2130" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p3-fork-to-resolve-sonarqube_di" bpmnElement="flow-p3-fork-to-resolve-sonarqube">
+        <di:waypoint x="2085" y="410" /><di:waypoint x="2130" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p3-fork-to-deploy-dev_di" bpmnElement="flow-p3-fork-to-deploy-dev">
+        <di:waypoint x="2060" y="435" /><di:waypoint x="2060" y="640" /><di:waypoint x="2130" y="640" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-resolve-security-to-p3-join_di" bpmnElement="flow-resolve-security-to-p3-join">
+        <di:waypoint x="2230" y="180" /><di:waypoint x="2420" y="180" /><di:waypoint x="2420" y="385" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-resolve-sonarqube-to-p3-join_di" bpmnElement="flow-resolve-sonarqube-to-p3-join">
+        <di:waypoint x="2230" y="410" /><di:waypoint x="2395" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-deploy-dev-to-p3-join_di" bpmnElement="flow-deploy-dev-to-p3-join">
+        <di:waypoint x="2230" y="640" /><di:waypoint x="2420" y="640" /><di:waypoint x="2420" y="435" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow-p3-join-to-phase3-end_di" bpmnElement="flow-p3-join-to-phase3-end">
+        <di:waypoint x="2445" y="410" /><di:waypoint x="2492" y="410" />
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+
+</bpmn:definitions>

@@ -11,6 +11,7 @@ from models.instance import (
     StartInstanceRequest,
     StartInstanceResponse,
     TaskCompleteRequest,
+    TaskItem,
 )
 
 logger = structlog.get_logger(__name__)
@@ -72,6 +73,24 @@ async def get_instance_history(instance_id: str) -> list[HistoryEntry]:
             ended_at=el.get("endDate"),
         )
         for el in completed
+    ]
+
+
+@router.get("/{instance_id}/tasks", response_model=list[TaskItem])
+async def list_tasks(instance_id: str) -> list[TaskItem]:
+    instance = await operate.get_instance(instance_id)
+    if instance is None:
+        raise HTTPException(status_code=404, detail=f"Instance '{instance_id}' not found")
+
+    raw = await tasklist.list_tasks(instance_id)
+    return [
+        TaskItem(
+            task_id=t["id"] or "",
+            element_id=t.get("taskDefinitionId") or "",
+            element_name=t.get("name"),
+            assignee=t.get("assignee"),
+        )
+        for t in raw
     ]
 
 
