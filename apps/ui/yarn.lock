@@ -1140,6 +1140,33 @@ __metadata:
   languageName: node
   linkType: hard
 
+"branchline-ui@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "branchline-ui@workspace:."
+  dependencies:
+    "@emotion/react": "npm:^11.14.0"
+    "@emotion/styled": "npm:^11.14.1"
+    "@eslint/js": "npm:^10.0.1"
+    "@mui/icons-material": "npm:^9.2.0"
+    "@mui/material": "npm:^9.2.0"
+    "@types/node": "npm:^24.13.2"
+    "@types/react": "npm:^19.2.17"
+    "@types/react-dom": "npm:^19.2.3"
+    "@vitejs/plugin-react": "npm:^6.0.3"
+    eslint: "npm:^10.6.0"
+    eslint-config-prettier: "npm:^10.1.8"
+    eslint-plugin-react-hooks: "npm:^7.1.1"
+    globals: "npm:^17.7.0"
+    prettier: "npm:^3.9.4"
+    react: "npm:^19.2.7"
+    react-dom: "npm:^19.2.7"
+    react-router-dom: "npm:^7.18.1"
+    typescript: "npm:~6.0.2"
+    typescript-eslint: "npm:^8.63.0"
+    vite: "npm:^8.1.1"
+  languageName: unknown
+  linkType: soft
+
 "browserslist@npm:^4.24.0":
   version: 4.28.5
   resolution: "browserslist@npm:4.28.5"
@@ -2499,33 +2526,6 @@ __metadata:
   checksum: 10c0/2f25c74e65663c248fa1ade2b8459d9ce5372ff9dad07067310f132966ebec1d93f6c42f0baf77a6b6a7a91460463f708e6887013aaade22111037457c6b25df
   languageName: node
   linkType: hard
-
-"ui@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "ui@workspace:."
-  dependencies:
-    "@emotion/react": "npm:^11.14.0"
-    "@emotion/styled": "npm:^11.14.1"
-    "@eslint/js": "npm:^10.0.1"
-    "@mui/icons-material": "npm:^9.2.0"
-    "@mui/material": "npm:^9.2.0"
-    "@types/node": "npm:^24.13.2"
-    "@types/react": "npm:^19.2.17"
-    "@types/react-dom": "npm:^19.2.3"
-    "@vitejs/plugin-react": "npm:^6.0.3"
-    eslint: "npm:^10.6.0"
-    eslint-config-prettier: "npm:^10.1.8"
-    eslint-plugin-react-hooks: "npm:^7.1.1"
-    globals: "npm:^17.7.0"
-    prettier: "npm:^3.9.4"
-    react: "npm:^19.2.7"
-    react-dom: "npm:^19.2.7"
-    react-router-dom: "npm:^7.18.1"
-    typescript: "npm:~6.0.2"
-    typescript-eslint: "npm:^8.63.0"
-    vite: "npm:^8.1.1"
-  languageName: unknown
-  linkType: soft
 
 "undici-types@npm:~7.18.0":
   version: 7.18.2
