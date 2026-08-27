@@ -37,5 +37,8 @@ jobs:
       - name: Format check (prettier)
         run: yarn prettier --check src/
 
+      - name: Test (vitest)
+        run: yarn test
+
       - name: Build (tsc + vite)
         run: yarn build
