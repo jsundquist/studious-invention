@@ -3,11 +3,12 @@ import pytest
 import respx
 
 import services.tasklist as tasklist
+from config import config
 
 
 @respx.mock
 async def test_list_tasks_returns_json_body() -> None:
-    respx.post(f"{tasklist.TASKLIST_URL}/v1/tasks/search").mock(
+    respx.post(f"{config.tasklist_url}/v1/tasks/search").mock(
         return_value=httpx.Response(200, json=[{"id": "task-1", "name": "Review"}])
     )
 
@@ -18,10 +19,10 @@ async def test_list_tasks_returns_json_body() -> None:
 
 @respx.mock
 async def test_complete_task_assigns_before_completing() -> None:
-    assign_route = respx.patch(f"{tasklist.TASKLIST_URL}/v1/tasks/task-1/assign").mock(
+    assign_route = respx.patch(f"{config.tasklist_url}/v1/tasks/task-1/assign").mock(
         return_value=httpx.Response(200)
     )
-    complete_route = respx.patch(f"{tasklist.TASKLIST_URL}/v1/tasks/task-1/complete").mock(
+    complete_route = respx.patch(f"{config.tasklist_url}/v1/tasks/task-1/complete").mock(
         return_value=httpx.Response(200)
     )
 
@@ -33,10 +34,10 @@ async def test_complete_task_assigns_before_completing() -> None:
 
 @respx.mock
 async def test_complete_task_raises_on_upstream_failure() -> None:
-    respx.patch(f"{tasklist.TASKLIST_URL}/v1/tasks/task-1/assign").mock(
+    respx.patch(f"{config.tasklist_url}/v1/tasks/task-1/assign").mock(
         return_value=httpx.Response(200)
     )
-    respx.patch(f"{tasklist.TASKLIST_URL}/v1/tasks/task-1/complete").mock(
+    respx.patch(f"{config.tasklist_url}/v1/tasks/task-1/complete").mock(
         return_value=httpx.Response(500)
     )
 

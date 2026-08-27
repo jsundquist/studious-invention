@@ -2,6 +2,7 @@ import httpx
 import respx
 
 import services.operate as operate
+from config import config
 
 SAMPLE_BPMN = """<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
@@ -46,8 +47,8 @@ def test_parse_phases_from_bpmn_with_no_process_element() -> None:
 
 @respx.mock
 async def test_list_process_definitions_maps_response() -> None:
-    respx.post(f"{operate.OPERATE_URL}/api/login").mock(return_value=httpx.Response(204))
-    respx.post(f"{operate.OPERATE_URL}/v1/process-definitions/search").mock(
+    respx.post(f"{config.operate_url}/api/login").mock(return_value=httpx.Response(204))
+    respx.post(f"{config.operate_url}/v1/process-definitions/search").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -69,8 +70,8 @@ async def test_list_process_definitions_maps_response() -> None:
 
 @respx.mock
 async def test_get_process_definition_returns_none_when_not_found() -> None:
-    respx.post(f"{operate.OPERATE_URL}/api/login").mock(return_value=httpx.Response(204))
-    respx.post(f"{operate.OPERATE_URL}/v1/process-definitions/search").mock(
+    respx.post(f"{config.operate_url}/api/login").mock(return_value=httpx.Response(204))
+    respx.post(f"{config.operate_url}/v1/process-definitions/search").mock(
         return_value=httpx.Response(200, json={"items": []})
     )
 
@@ -79,8 +80,8 @@ async def test_get_process_definition_returns_none_when_not_found() -> None:
 
 @respx.mock
 async def test_get_process_definition_returns_detail_with_phases() -> None:
-    respx.post(f"{operate.OPERATE_URL}/api/login").mock(return_value=httpx.Response(204))
-    respx.post(f"{operate.OPERATE_URL}/v1/process-definitions/search").mock(
+    respx.post(f"{config.operate_url}/api/login").mock(return_value=httpx.Response(204))
+    respx.post(f"{config.operate_url}/v1/process-definitions/search").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -95,7 +96,7 @@ async def test_get_process_definition_returns_detail_with_phases() -> None:
             },
         )
     )
-    respx.get(f"{operate.OPERATE_URL}/v1/process-definitions/42/xml").mock(
+    respx.get(f"{config.operate_url}/v1/process-definitions/42/xml").mock(
         return_value=httpx.Response(200, text=SAMPLE_BPMN)
     )
 
@@ -110,8 +111,8 @@ async def test_get_process_definition_returns_detail_with_phases() -> None:
 
 @respx.mock
 async def test_get_instance_returns_none_on_404() -> None:
-    respx.post(f"{operate.OPERATE_URL}/api/login").mock(return_value=httpx.Response(204))
-    respx.get(f"{operate.OPERATE_URL}/v1/process-instances/999").mock(
+    respx.post(f"{config.operate_url}/api/login").mock(return_value=httpx.Response(204))
+    respx.get(f"{config.operate_url}/v1/process-instances/999").mock(
         return_value=httpx.Response(404)
     )
 
@@ -120,8 +121,8 @@ async def test_get_instance_returns_none_on_404() -> None:
 
 @respx.mock
 async def test_get_instance_returns_json_body() -> None:
-    respx.post(f"{operate.OPERATE_URL}/api/login").mock(return_value=httpx.Response(204))
-    respx.get(f"{operate.OPERATE_URL}/v1/process-instances/1").mock(
+    respx.post(f"{config.operate_url}/api/login").mock(return_value=httpx.Response(204))
+    respx.get(f"{config.operate_url}/v1/process-instances/1").mock(
         return_value=httpx.Response(
             200, json={"bpmnProcessId": "sample-process", "state": "ACTIVE"}
         )
@@ -134,8 +135,8 @@ async def test_get_instance_returns_json_body() -> None:
 
 @respx.mock
 async def test_get_active_elements_filters_by_active_state() -> None:
-    respx.post(f"{operate.OPERATE_URL}/api/login").mock(return_value=httpx.Response(204))
-    route = respx.post(f"{operate.OPERATE_URL}/v1/flow-node-instances/search").mock(
+    respx.post(f"{config.operate_url}/api/login").mock(return_value=httpx.Response(204))
+    route = respx.post(f"{config.operate_url}/v1/flow-node-instances/search").mock(
         return_value=httpx.Response(200, json={"items": [{"flowNodeId": "review-task"}]})
     )
 
@@ -148,8 +149,8 @@ async def test_get_active_elements_filters_by_active_state() -> None:
 
 @respx.mock
 async def test_get_completed_elements_filters_by_completed_state() -> None:
-    respx.post(f"{operate.OPERATE_URL}/api/login").mock(return_value=httpx.Response(204))
-    route = respx.post(f"{operate.OPERATE_URL}/v1/flow-node-instances/search").mock(
+    respx.post(f"{config.operate_url}/api/login").mock(return_value=httpx.Response(204))
+    route = respx.post(f"{config.operate_url}/v1/flow-node-instances/search").mock(
         return_value=httpx.Response(200, json={"items": []})
     )
 

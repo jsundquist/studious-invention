@@ -5,11 +5,8 @@ from typing import Any
 
 import httpx
 
+from config import config
 from models.workflow import PhaseSummary, StepSummary, WorkflowDetail, WorkflowSummary
-
-OPERATE_URL = "http://localhost:8081"
-OPERATE_USER = "demo"
-OPERATE_PASSWORD = "demo"
 
 BPMN_NS = {"bpmn": "http://www.omg.org/spec/BPMN/20100524/MODEL"}
 
@@ -18,8 +15,8 @@ BPMN_NS = {"bpmn": "http://www.omg.org/spec/BPMN/20100524/MODEL"}
 async def _session() -> AsyncGenerator[httpx.AsyncClient, None]:
     async with httpx.AsyncClient() as client:
         await client.post(
-            f"{OPERATE_URL}/api/login",
-            data={"username": OPERATE_USER, "password": OPERATE_PASSWORD},
+            f"{config.operate_url}/api/login",
+            data={"username": config.operate_user, "password": config.operate_password},
         )
         yield client
 
@@ -27,7 +24,7 @@ async def _session() -> AsyncGenerator[httpx.AsyncClient, None]:
 async def list_process_definitions() -> list[WorkflowSummary]:
     async with _session() as client:
         response = await client.post(
-            f"{OPERATE_URL}/v1/process-definitions/search",
+            f"{config.operate_url}/v1/process-definitions/search",
             json={"filter": {}, "size": 100},
         )
         response.raise_for_status()
@@ -46,7 +43,7 @@ async def list_process_definitions() -> list[WorkflowSummary]:
 async def get_process_definition(name: str) -> WorkflowDetail | None:
     async with _session() as client:
         search = await client.post(
-            f"{OPERATE_URL}/v1/process-definitions/search",
+            f"{config.operate_url}/v1/process-definitions/search",
             json={"filter": {"bpmnProcessId": name}, "size": 1},
         )
         search.raise_for_status()
@@ -57,7 +54,7 @@ async def get_process_definition(name: str) -> WorkflowDetail | None:
         definition = items[0]
         key = definition["key"]
 
-        xml_response = await client.get(f"{OPERATE_URL}/v1/process-definitions/{key}/xml")
+        xml_response = await client.get(f"{config.operate_url}/v1/process-definitions/{key}/xml")
         xml_response.raise_for_status()
         bpmn_xml = xml_response.text
 
@@ -107,7 +104,7 @@ def _parse_phases_from_bpmn(bpmn_xml: str) -> list[PhaseSummary]:
 
 async def get_instance(instance_id: str) -> dict[str, Any] | None:
     async with _session() as client:
-        response = await client.get(f"{OPERATE_URL}/v1/process-instances/{instance_id}")
+        response = await client.get(f"{config.operate_url}/v1/process-instances/{instance_id}")
         if response.status_code == 404:
             return None
         response.raise_for_status()
@@ -117,7 +114,7 @@ async def get_instance(instance_id: str) -> dict[str, Any] | None:
 async def get_active_elements(instance_id: str) -> list[dict[str, Any]]:
     async with _session() as client:
         response = await client.post(
-            f"{OPERATE_URL}/v1/flow-node-instances/search",
+            f"{config.operate_url}/v1/flow-node-instances/search",
             json={
                 "filter": {"processInstanceKey": int(instance_id), "state": "ACTIVE"},
                 "size": 50,
@@ -130,7 +127,7 @@ async def get_active_elements(instance_id: str) -> list[dict[str, Any]]:
 async def get_completed_elements(instance_id: str) -> list[dict[str, Any]]:
     async with _session() as client:
         response = await client.post(
-            f"{OPERATE_URL}/v1/flow-node-instances/search",
+            f"{config.operate_url}/v1/flow-node-instances/search",
             json={
                 "filter": {"processInstanceKey": int(instance_id), "state": "COMPLETED"},
                 "size": 200,
