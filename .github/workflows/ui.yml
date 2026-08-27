@@ -1,0 +1,41 @@
+name: ui
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/ui/**'
+      - '.github/workflows/ui.yml'
+  pull_request:
+    paths:
+      - 'apps/ui/**'
+      - '.github/workflows/ui.yml'
+
+defaults:
+  run:
+    working-directory: apps/ui
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Lint (eslint)
+        run: yarn lint
+
+      - name: Format check (prettier)
+        run: yarn prettier --check src/
+
+      - name: Build (tsc + vite)
+        run: yarn build

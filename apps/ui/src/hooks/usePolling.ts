@@ -1,6 +1,10 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 
-export function usePolling(callback: () => void, intervalMs: number, enabled = true) {
+export function usePolling(
+  callback: () => void,
+  intervalMs: number,
+  enabled = true,
+) {
   const callbackRef = useRef(callback)
   useLayoutEffect(() => {
     callbackRef.current = callback

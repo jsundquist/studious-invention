@@ -1,4 +1,6 @@
-const API_BASE: string = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000'
+const API_BASE: string =
+  (import.meta.env.VITE_API_URL as string | undefined) ??
+  'http://localhost:8000'
 
 export interface InstanceStatus {
   instance_id: string
@@ -43,11 +45,14 @@ export async function completeTask(
   outcome: 'approved' | 'skipped',
   reason?: string,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/instances/${instanceId}/tasks/${taskId}/complete`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ outcome, reason: reason ?? '' }),
-  })
+  const res = await fetch(
+    `${API_BASE}/instances/${instanceId}/tasks/${taskId}/complete`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outcome, reason: reason ?? '' }),
+    },
+  )
   if (!res.ok) {
     throw new Error(`Failed to complete task: ${res.status}`)
   }
